@@ -9,10 +9,11 @@ class KioskBase(BaseModel):
 
 
 class KioskCreate(KioskBase):
+    questionnaire_id: int | None = None
     pass
 
 
 class KioskRead(KioskBase):
     id: int
-
+    questionnaire_id: int | None = None
     model_config = {"from_attributes": True}

@@ -1,0 +1,130 @@
+CTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Kiosk</title>
+    <style>
+        body {
+            font-family: Arial;
+            text-align: center;
+            padding: 40px;
+        }
+        button {
+            padding: 20px;
+            margin: 10px;
+            font-size: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div id="app"></div>
+
+<script>
+const API = "/kiosk";
+
+let state = {
+    screen: "idle",
+    questionnaire: null,
+    answers: {},
+    kioskCode: "NICOSIA-01"
+};
+
+// ---------- Screens ----------
+
+function render() {
+    if (state.screen === "idle") renderIdle();
+    if (state.screen === "survey") renderSurvey();
+    if (state.screen === "thankyou") renderThankYou();
+}
+
+// ---------- Idle ----------
+
+function renderIdle() {
+    document.getElementById("app").innerHTML = `
+        <h1>Welcome</h1>
+        <button onclick="start()">Start</button>
+    `;
+}
+
+// ---------- Survey ----------
+
+async function start() {
+    const res = await fetch(API + "/questionnaires");
+    const data = await res.json();
+
+    state.questionnaire = data[0]; // MVP: first questionnaire
+    state.answers = {};
+    state.screen = "survey";
+    render();
+}
+
+function renderSurvey() {
+    const q = state.questionnaire;
+
+    let html = `<h2>${q.title}</h2>`;
+
+    q.questions.forEach(question => {
+        html += `<div><p>${question.text}</p>`;
+
+        if (question.type === "rating") {
+            for (let i = 1; i <= 5; i++) {
+                html += `<button onclick="answer('${question.code}', ${i})">${i}</button>`;
+            }
+        }
+
+        if (question.type === "text") {
+            html += `<input type="text" onchange="answer('${question.code}', this.value)" />`;
+        }
+
+        html += `</div>`;
+    });
+
+    html += `<br><button onclick="submit()">Submit</button>`;
+
+    document.getElementById("app").innerHTML = html;
+}
+
+function answer(code, value) {
+    state.answers[code] = value;
+}
+
+// ---------- Submit ----------
+
+async function submit() {
+    await fetch(API + "/responses", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            questionnaire_id: state.questionnaire.id,
+            kiosk_code: state.kioskCode,
+            answers: state.answers
+        })
+    });
+
+    state.screen = "thankyou";
+    render();
+
+    setTimeout(() => {
+        state.screen = "idle";
+        render();
+    }, 3000);
+}
+
+// ---------- Thank you ----------
+
+function renderThankYou() {
+    document.getElementById("app").innerHTML = `
+        <h2>Thank you!</h2>
+    `;
+}
+
+// init
+render();
+
+</script>
+
+</body>
+</html>
+

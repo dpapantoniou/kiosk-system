@@ -11,3 +11,23 @@ node_modules/
 
 # Logs
 *.log
+
+# Python
+__pycache__/
+*.pyc
+
+# Swap/temp files
+*.swp
+*~
+
+# Backups / versions
+*_v0
+*_v1
+*.bak
+
+# Local test files
+test_*.py
+
+# Environment
+.env
+venv/

@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Kiosk Admin</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      background: #f5f7fa;
+      color: #2c3e50;
+    }
+	#loginBox {
+    max-width: 400px;
+    margin: 80px auto;
+    background: white;
+    padding: 24px;
+    border-radius: 10px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.15);
+    }
+	
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1, h2, h3 {
+      margin-top: 0;
+    }
+    .card {
+      background: white;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 18px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    label {
+      display: block;
+      font-weight: bold;
+      margin-top: 10px;
+      margin-bottom: 4px;
+    }
+    input, textarea, select {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px;
+      font-size: 15px;
+      margin-bottom: 8px;
+    }
+    textarea {
+      min-height: 70px;
+    }
+    button {
+      padding: 10px 14px;
+      font-size: 15px;
+      border: none;
+      border-radius: 8px;
+      background: #3498db;
+      color: white;
+      cursor: pointer;
+      margin-right: 8px;
+      margin-top: 8px;
+    }
+    button:hover {
+      background: #2980b9;
+    }
+    .secondary {
+      background: #7f8c8d;
+    }
+    .danger {
+      background: #c0392b;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .question-box {
+      border: 1px solid #dfe6e9;
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 10px;
+      background: #fafafa;
+    }
+    .muted {
+      color: #666;
+      font-size: 14px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      border-bottom: 1px solid #eee;
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 0;
+    }
+	
+	
+  </style>
+</head>
+<body>
+<div id="loginBox">
+  <h1>Admin Login</h1>
+  <input
+      id="loginUser"
+      placeholder="Username"
+      style="
+        width:100%;
+        padding:10px;
+        box-sizing:border-box;
+        margin-bottom:12px;
+      "
+  >
+  <div style="margin-top:12px;">
+    <input
+        id="loginPass"
+        type="password"
+        placeholder="Password"
+        style="
+          width:100%;
+          padding:10px;
+          box-sizing:border-box;
+        "
+    >
+    <label style="
+        display:flex;
+        align-items:center;
+        gap:8px;
+        margin-top:10px;
+        font-size:14px;
+        color:#555;
+        cursor:pointer;
+    ">
+      <input
+          type="checkbox"
+          style="
+            width:16px;
+            height:16px;
+            cursor:pointer;
+          "
+          onchange="
+            document.getElementById('loginPass').type =
+              this.checked ? 'text' : 'password';
+          "
+      >
+      <span>Show Password</span>
+    </label>
+  </div>
+  <button
+      onclick="login()"
+      style="
+        width:100%;
+        margin-top:18px;
+        padding:10px;
+      "
+  >
+    Login
+  </button>
+  <p id="loginMsg"></p>
+</div>
+
+
+<div id="adminApp" style="display:none;">
+
+  <div class="wrap">
+    <h1>Kiosk Admin</h1>
+	
+	<button onclick="logout()">Logout</button>
+	
+    <div class="card">
+      <h2>Create Questionnaire</h2>
+
+      <label>Questionnaire Code</label>
+      <input id="q_code" placeholder="e.g. QNR-3">
+
+      <label>Questionnaire Name</label>
+      <input id="q_name" placeholder="e.g. Service Quality Survey">
+
+      <label>Active</label>
+      <select id="q_active">
+        <option value="true" selected>true</option>
+        <option value="false">false</option>
+      </select>
+
+      <h3>Add Question</h3>
+
+      <label>Question Code</label>
+      <input id="question_code" placeholder="e.g. Q1">
+
+      <label>Order No</label>
+      <input id="question_order" type="number" value="1">
+
+      <label>Question Type</label>
+      <select id="question_type" onchange="toggleOptionsArea()">
+        <option value="rating">rating</option>
+        <option value="text">text</option>
+        <option value="single_choice">single_choice</option>
+        <option value="multi_choice">multi_choice</option>
+      </select>
+
+      <label>Question Text (EN)</label>
+      <input id="text_en" placeholder="English text">
+
+      <label>Question Text (EL)</label>
+      <input id="text_el" placeholder="Greek text">
+
+      <label>Question Text (TR)</label>
+      <input id="text_tr" placeholder="Turkish text">
+
+      <div id="options_area" style="display:none;">
+        <label>Options (EN, one per line)</label>
+        <textarea id="opts_en"></textarea>
+
+        <label>Options (EL, one per line)</label>
+        <textarea id="opts_el"></textarea>
+
+        <label>Options (TR, one per line)</label>
+        <textarea id="opts_tr"></textarea>
+      </div>
+
+      <label>Required</label>
+      <select id="question_required">
+        <option value="false" selected>false</option>
+        <option value="true">true</option>
+      </select>
+
+      <button onclick="addQuestion()">Add Question</button>
+      <button class="secondary" onclick="resetQuestionForm()">Clear Question Form</button>
+
+      <div id="questions_preview"></div>
+
+      <button onclick="createQuestionnaire()">Create Questionnaire</button>
+      <div id="create_result" class="muted"></div>
+    </div>
+
+    <div class="row">
+      <div class="card">
+        <h2>Kiosks</h2>
+        <button onclick="loadKiosks()">Refresh Kiosks</button>
+        <div id="kiosks_list" class="muted"></div>
+      </div>
+
+      <div class="card">
+        <h2>Questionnaires</h2>
+        <button onclick="loadQuestionnaires()">Refresh Questionnaires</button>
+        <div id="questionnaires_list" class="muted"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Assign Questionnaire to Kiosk</h2>
+
+      <label>Select Kiosk</label>
+      <select id="assign_kiosk"></select>
+
+      <label>Select Questionnaire</label>
+      <select id="assign_questionnaire"></select>
+
+      <button onclick="assignQuestionnaire()">Assign</button>
+      <div id="assign_result" class="muted"></div>
+    </div>
+
+    <div class="card">
+      <h2>Responses</h2>
+      <button onclick="loadResponses()">Refresh Responses</button>
+      <div id="responses_list" class="muted"></div>
+	  
+	  <button onclick="downloadCsv()">Export CSV</button>
+	  
+    </div>
+  </div>
+</div>
+  <script>
+    const API = "/kiosk";
+async function login() {
+    const username = document.getElementById("loginUser").value;
+    const password = document.getElementById("loginPass").value;
+    const res = await fetch(`${API}/auth/login`, {
+        method: "POST",
+		credentials: "include",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({username, password})
+    });
+    if (!res.ok) {
+        document.getElementById("loginMsg").innerText = "Login failed";
+        return;
+    }
+    document.getElementById("loginBox").style.display = "none";
+    document.getElementById("adminApp").style.display = "block";
+    loadKiosks();
+    loadQuestionnaires();
+    loadResponses();
+}
+async function checkAuth() {
+    const res = await fetch(`${API}/auth/me`, {
+        credentials: "include"
+    });
+    if (res.ok) {
+        document.getElementById("loginBox").style.display = "none";
+        document.getElementById("adminApp").style.display = "block";
+        loadKiosks();
+        loadQuestionnaires();
+        loadResponses();
+    } else {
+        document.getElementById("loginBox").style.display = "block";
+        document.getElementById("adminApp").style.display = "none";
+    }
+}
+async function logout() {
+    await fetch(`${API}/auth/logout`, {
+        method: "POST",
+        credentials: "include"
+    });
+
+    location.reload();
+}	
+    let draftQuestions = [];
+    let kiosksCache = [];
+    let questionnairesCache = [];
+    function toggleOptionsArea() {
+      const type = document.getElementById("question_type").value;
+      document.getElementById("options_area").style.display =
+        (type === "single_choice" || type === "multi_choice") ? "block" : "none";
+    }
+    function linesToArray(text) {
+      return text
+        .split("\n")
+        .map(x => x.trim())
+        .filter(Boolean);
+    }
+    function renderDraftQuestions() {
+      const wrap = document.getElementById("questions_preview");
+      if (draftQuestions.length === 0) {
+        wrap.innerHTML = `<p class="muted">No questions added yet.</p>`;
+        return;
+      }
+      wrap.innerHTML = `<h3>Questions to be created</h3>` + draftQuestions.map((q, idx) => `
+        <div class="question-box">
+          <strong>${q.code}</strong> — ${q.question_type} — order ${q.order_no}<br>
+          <span class="muted">EN:</span> ${q.text_i18n.en || ""}<br>
+          <span class="muted">EL:</span> ${q.text_i18n.el || ""}<br>
+          <span class="muted">TR:</span> ${q.text_i18n.tr || ""}<br>
+          ${q.options_i18n ? `<pre>${JSON.stringify(q.options_i18n, null, 2)}</pre>` : ""}
+          <button class="danger" onclick="removeQuestion(${idx})">Remove</button>
+        </div>
+      `).join("");
+    }
+
+    function resetQuestionForm() {
+      document.getElementById("question_code").value = "";
+      document.getElementById("question_order").value = draftQuestions.length + 1;
+      document.getElementById("question_type").value = "rating";
+      document.getElementById("text_en").value = "";
+      document.getElementById("text_el").value = "";
+      document.getElementById("text_tr").value = "";
+      document.getElementById("opts_en").value = "";
+      document.getElementById("opts_el").value = "";
+      document.getElementById("opts_tr").value = "";
+      document.getElementById("question_required").value = "false";
+      toggleOptionsArea();
+    }
+
+    function removeQuestion(idx) {
+      draftQuestions.splice(idx, 1);
+      renderDraftQuestions();
+    }
+
+    function addQuestion() {
+      const code = document.getElementById("question_code").value.trim();
+      const orderNo = parseInt(document.getElementById("question_order").value, 10);
+      const type = document.getElementById("question_type").value;
+      const textEn = document.getElementById("text_en").value.trim();
+      const textEl = document.getElementById("text_el").value.trim();
+      const textTr = document.getElementById("text_tr").value.trim();
+      const required = document.getElementById("question_required").value === "true";
+
+      if (!code || !orderNo || !textEn) {
+        alert("Please provide at least question code, order number, and English text.");
+        return;
+      }
+
+      let optionsI18n = null;
+      if (type === "single_choice" || type === "multi_choice") {
+        const en = linesToArray(document.getElementById("opts_en").value);
+        const el = linesToArray(document.getElementById("opts_el").value);
+        const tr = linesToArray(document.getElementById("opts_tr").value);
+
+        if (en.length === 0) {
+          alert("Choice questions need at least English options.");
+          return;
+        }
+
+        optionsI18n = { en, el, tr };
+      }
+
+      draftQuestions.push({
+        code,
+        order_no: orderNo,
+        question_type: type,
+        text_i18n: {
+          en: textEn,
+          el: textEl,
+          tr: textTr
+        },
+        options_i18n: optionsI18n,
+        is_required: required,
+        branching_rule: null
+      });
+
+      renderDraftQuestions();
+      resetQuestionForm();
+    }
+
+    async function createQuestionnaire() {
+      const code = document.getElementById("q_code").value.trim();
+      const name = document.getElementById("q_name").value.trim();
+      const isActive = document.getElementById("q_active").value === "true";
+
+      if (!code || !name) {
+        alert("Questionnaire code and name are required.");
+        return;
+      }
+
+      if (draftQuestions.length === 0) {
+        alert("Add at least one question.");
+        return;
+      }
+
+      const payload = {
+        code,
+        name,
+        is_active: isActive,
+        questions: draftQuestions
+      };
+
+      const resultBox = document.getElementById("create_result");
+      resultBox.innerText = "Creating...";
+
+      try {
+        const res = await fetch(`${API}/questionnaires`, {
+          method: "POST",
+		  credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          resultBox.innerText = `Error: ${JSON.stringify(data)}`;
+          return;
+        }
+
+        resultBox.innerText = `Created questionnaire ${data.code} (id=${data.id})`;
+        draftQuestions = [];
+        renderDraftQuestions();
+        document.getElementById("q_code").value = "";
+        document.getElementById("q_name").value = "";
+        await loadQuestionnaires();
+      } catch (e) {
+        resultBox.innerText = `Error: ${e.message}`;
+      }
+    }
+
+    async function loadKiosks() {
+      const wrap = document.getElementById("kiosks_list");
+      wrap.innerText = "Loading...";
+      try {
+        const res = await fetch(`${API}/kiosks`, {
+		credentials: "include"
+		});
+		if (res.status === 401) {
+            location.reload();
+            return;
+        }
+        const data = await res.json();
+        kiosksCache = data;
+
+        wrap.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th><th>Code</th><th>Name</th><th>Location</th><th>Questionnaire ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.map(k => `
+                <tr>
+                  <td>${k.id}</td>
+                  <td>${k.code}</td>
+                  <td>${k.name}</td>
+                  <td>${k.location || ""}</td>
+                  <td>${k.questionnaire_id ?? ""}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        `;
+
+        fillAssignSelectors();
+      } catch (e) {
+        wrap.innerText = `Error: ${e.message}`;
+      }
+    }
+
+    async function loadQuestionnaires() {
+      const wrap = document.getElementById("questionnaires_list");
+      wrap.innerText = "Loading...";
+      try {
+	  const res = await fetch(`${API}/questionnaires`, {
+          credentials: "include"
+      });
+
+      if (res.status === 401) {
+          location.reload();
+          return;
+      }
+        const data = await res.json();
+        questionnairesCache = data;
+
+        wrap.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th><th>Code</th><th>Name</th><th>Questions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.map(q => `
+                <tr>
+                  <td>${q.id}</td>
+                  <td>${q.code}</td>
+                  <td>${q.name}</td>
+                  <td>${q.questions ? q.questions.length : 0}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        `;
+
+        fillAssignSelectors();
+      } catch (e) {
+        wrap.innerText = `Error: ${e.message}`;
+      }
+    }
+
+    function fillAssignSelectors() {
+      const kioskSel = document.getElementById("assign_kiosk");
+      const qSel = document.getElementById("assign_questionnaire");
+
+      kioskSel.innerHTML = kiosksCache.map(k =>
+        `<option value="${k.id}">${k.code} — ${k.name}</option>`
+      ).join("");
+
+      qSel.innerHTML = questionnairesCache.map(q =>
+        `<option value="${q.id}">${q.id} — ${q.code} — ${q.name}</option>`
+      ).join("");
+    }
+
+    async function assignQuestionnaire() {
+      const kioskId = parseInt(document.getElementById("assign_kiosk").value, 10);
+      const questionnaireId = parseInt(document.getElementById("assign_questionnaire").value, 10);
+      const kiosk = kiosksCache.find(k => k.id === kioskId);
+      const resultBox = document.getElementById("assign_result");
+
+      if (!kiosk || !questionnaireId) {
+        resultBox.innerText = "Please select both kiosk and questionnaire.";
+        return;
+      }
+
+      const payload = {
+        name: kiosk.name,
+        location: kiosk.location,
+        is_active: kiosk.is_active,
+        questionnaire_id: questionnaireId
+      };
+
+      resultBox.innerText = "Assigning...";
+
+      try {
+        const res = await fetch(`${API}/kiosks/${kioskId}`, {
+          method: "PUT",
+          credentials: "include",
+		  headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          resultBox.innerText = `Error: ${JSON.stringify(data)}`;
+          return;
+        }
+
+        resultBox.innerText = `Assigned questionnaire ${questionnaireId} to kiosk ${kiosk.code}`;
+        await loadKiosks();
+      } catch (e) {
+        resultBox.innerText = `Error: ${e.message}`;
+      }
+    }
+
+    async function loadResponses() {
+      const wrap = document.getElementById("responses_list");
+      wrap.innerText = "Loading...";
+      try {
+     const res = await fetch(`${API}/responses`, {
+         credentials: "include"
+     });
+     if (res.status === 401) {
+          location.reload();
+          return;
+     }
+        const data = await res.json();
+
+        wrap.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th><th>Time</th><th>Kiosk</th><th>Lang</th><th>Answers</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.map(r => `
+                <tr>
+                  <td>${r.id}</td>
+                  <td>${r.created_at || ""}</td>
+                  <td>${r.kiosk_code}</td>
+                  <td>${r.lang || ""}</td>
+                  <td><pre>${JSON.stringify(r.answers, null, 2)}</pre></td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        `;
+      } catch (e) {
+        wrap.innerText = `Error: ${e.message}`;
+      }
+    }
+    function downloadCsv() {
+         window.open(`${API}/responses/export.csv`, "_blank");
+    }
+    toggleOptionsArea();
+    renderDraftQuestions();
+    checkAuth();
+  </script>
+</body>
+</html>

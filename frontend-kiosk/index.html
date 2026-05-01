@@ -1,21 +1,52 @@
-CTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <title>Kiosk</title>
-    <style>
-        body {
-            font-family: Arial;
-            text-align: center;
-            padding: 40px;
-        }
-        button {
-            padding: 20px;
-            margin: 10px;
-            font-size: 20px;
-        }
-    </style>
-</head>
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #f5f7fa;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+#app {
+    width: 90%;
+    max-width: 600px;
+    text-align: center;
+}
+
+h1, h2 {
+    color: #2c3e50;
+}
+
+button {
+    width: 100%;
+    padding: 20px;
+    margin: 10px 0;
+    font-size: 24px;
+    border: none;
+    border-radius: 10px;
+    background-color: #3498db;
+    color: white;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #2980b9;
+}
+
+input {
+    width: 100%;
+    padding: 15px;
+    font-size: 18px;
+}
+</style>
+	</head>
 
 <body>
 
@@ -23,13 +54,57 @@ CTYPE html>
 
 <script>
 const API = "/kiosk";
+const params = new URLSearchParams(window.location.search);
 
 let state = {
     screen: "idle",
     questionnaire: null,
     answers: {},
-    kioskCode: "NICOSIA-01"
+    kioskCode: params.get("kioask") || "NICOSIA-01",
+    lang: "el"
 };
+// =====================================================
+// OFFLINE SUPPORT — local queue storage
+// =====================================================
+
+function saveOffline(payload) {
+    try {
+        let queue = JSON.parse(localStorage.getItem("offlineQueue") || "[]");
+        queue.push(payload);
+        localStorage.setItem("offlineQueue", JSON.stringify(queue));
+        console.log("Saved offline response. Queue size:", queue.length);
+    } catch (e) {
+        console.error("Failed to save offline response", e);
+    }
+}
+
+async function syncOffline() {
+    let queue = JSON.parse(localStorage.getItem("offlineQueue") || "[]");
+
+    if (!queue.length) return;
+
+    console.log("Attempting sync of", queue.length, "offline responses");
+
+    let remaining = [];
+
+    for (const item of queue) {
+        try {
+            const res = await fetch(API + "/responses", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(item)
+            });
+
+            if (!res.ok) throw new Error("Failed sync");
+
+        } catch {
+            remaining.push(item);
+        }
+    }
+
+    localStorage.setItem("offlineQueue", JSON.stringify(remaining));
+    console.log("Sync complete. Remaining:", remaining.length);
+}
 
 // ---------- Screens ----------
 
@@ -40,76 +115,229 @@ function render() {
 }
 
 // ---------- Idle ----------
-
 function renderIdle() {
     document.getElementById("app").innerHTML = `
-        <h1>Welcome</h1>
-        <button onclick="start()">Start</button>
+        <h1>Tell us about your experience</h1>
+
+        <button onclick="setLang('el')">Ελληνικά</button>
+        <button onclick="setLang('en')">English</button>
+        <button onclick="setLang('tr')">Türkçe</button>
     `;
 }
 
-// ---------- Survey ----------
-
-async function start() {
-    const res = await fetch(API + "/questionnaires");
-    const data = await res.json();
-
-    state.questionnaire = data[0]; // MVP: first questionnaire
-    state.answers = {};
-    state.screen = "survey";
-    render();
+function setLang(lang) {
+    state.lang = lang;
+    start();
 }
+// ---------- Survey ----------
+async function start() {
+    try {
+        const res = await fetch(API + "/kiosks/" + state.kioskCode + "/questionnaire");
+        if (!res.ok) throw new Error("Network error");
+
+        const data = await res.json();
+        state.questionnaire = Array.isArray(data) ? data[0] : data;
+ // =====================================================
+// CACHE questionnaire for offline use
+// =====================================================
+        localStorage.setItem("cachedQuestionnaire", JSON.stringify(state.questionnaire));       
+		
+		state.answers = {};
+        state.screen = "survey";
+
+        render();
+        resetIdleTimer();
+    } catch (e) {
+        document.getElementById("app").innerHTML =
+            `<h2>Service temporarily unavailable</h2>`;
+    }
+}
+
+let idleTimer;
+
+function resetIdleTimer() {
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+        state.screen = "idle";
+        render();
+    }, 60000); // 60 sec
+}
+
+document.addEventListener("click", resetIdleTimer);
+document.addEventListener("touchstart", resetIdleTimer);
+
+
 
 function renderSurvey() {
     const q = state.questionnaire;
+	if (!q || !q.questions) {
+        document.getElementById("app").innerHTML =
+        `<h2>No questionnaire available</h2>`;
+         return;
+    }
 
-    let html = `<h2>${q.title}</h2>`;
-
+	
+    let html = `<h2>${q.name}</h2>`;
+    // sort by order_no (important)
+    q.questions.sort((a, b) => a.order_no - b.order_no);	
     q.questions.forEach(question => {
-        html += `<div><p>${question.text}</p>`;
+      const text = question.text_i18n[state.lang] || question.text_i18n['en'];
+      html += `<div><p>${text}</p>`;
 
-        if (question.type === "rating") {
-            for (let i = 1; i <= 5; i++) {
-                html += `<button onclick="answer('${question.code}', ${i})">${i}</button>`;
-            }
+      // ---------- RATING ----------
+     if (question.question_type === "rating") {
+        html += `<div style="display:flex; gap:10px;">`;
+        for (let i = 1; i <= 5; i++) {
+            html += `
+                <button 
+                    style="flex:1;" 
+                    data-q="${question.code}"
+                    onclick="
+                        document.querySelectorAll('[data-q=&quot;${question.code}&quot;]')
+                            .forEach(b => b.style.background='');
+                        this.style.background='green';
+                        answer('${question.code}', ${i});
+                    ">
+                    ${i}
+                </button>
+        `   ;
         }
-
-        if (question.type === "text") {
-            html += `<input type="text" onchange="answer('${question.code}', this.value)" />`;
-        }
-
         html += `</div>`;
-    });
+     }
 
-    html += `<br><button onclick="submit()">Submit</button>`;
+       // ---------- TEXT ----------
+       if (question.question_type === "text") {
+         html += `<input type="text" onchange="answer('${question.code}', this.value); this.style.background='green'" />`;
+       }
 
+       // ---------- SINGLE CHOICE ----------
+       if (question.question_type === "single_choice") {
+           const opts = (question.options_i18n && 
+                        (question.options_i18n[state.lang] || question.options_i18n['en'])) || [];
+          opts.forEach(opt => {
+            html += `
+                <div>
+                    <label>
+                        <input type="radio" name="${question.code}" 
+                            onchange="answer('${question.code}', '${opt}')">
+                        ${opt}
+                    </label>
+                </div>
+            `;
+            });
+        }
+ 
+       // ---------- MULTI CHOICE ----------
+       if (question.question_type === "multi_choice") {
+           const opts = (question.options_i18n && 
+                       (question.options_i18n[state.lang] || question.options_i18n['en'])) || [];
+          opts.forEach(opt => {
+            html += `
+                <div>
+                    <label>
+                        <input type="checkbox" 
+                            onchange="toggleAnswer('${question.code}', '${opt}', this.checked)">
+                        ${opt}
+                    </label>
+                </div>
+            `;
+           });
+        }
+
+        html += `</div><br>`;
+});	
+	
+    html += `<br><button id="submitBtn" onclick="submit()">Submit</button>`;
     document.getElementById("app").innerHTML = html;
 }
-
 function answer(code, value) {
     state.answers[code] = value;
 }
-
 // ---------- Submit ----------
+// =====================================================
+// SUBMIT — supports offline fallback
+// =====================================================
 
 async function submit() {
-    await fetch(API + "/responses", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-            questionnaire_id: state.questionnaire.id,
-            kiosk_code: state.kioskCode,
-            answers: state.answers
-        })
-    });
+    const btn = document.getElementById("submitBtn");
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = "Submitting...";
+    }
+
+    if (Object.keys(state.answers).length === 0) {
+        alert("Please answer at least one question");
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = "Submit";
+        }
+        return;
+    }
+
+    const payload = {
+        questionnaire_id: state.questionnaire.id,
+        kiosk_code: state.kioskCode,
+        answers: state.answers,
+        lang: state.lang || "el"
+    };
+
+    try {
+        const res = await fetch(API + "/responses", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) throw new Error("Network error");
+
+        console.log("Submitted successfully");
+
 
     state.screen = "thankyou";
     render();
+catch (e) {
+    console.log("Offline — trying cached questionnaire");
+    const cached = localStorage.getItem("cachedQuestionnaire");
 
+    if (cached) {
+        state.questionnaire = JSON.parse(cached);
+        state.answers = {};
+        state.screen = "survey";
+
+        render();
+        resetIdleTimer();
+    } else {
+        document.getElementById("app").innerHTML =
+            `<h2>Service unavailable (no cached data)</h2>`;
+    }
+}
     setTimeout(() => {
         state.screen = "idle";
         render();
     }, 3000);
+}
+
+
+
+function toggleAnswer(code, value, checked) {
+    if (!state.answers[code]) {
+        state.answers[code] = [];
+    }
+
+    if (checked) {
+        // prevent duplicates
+        if (!state.answers[code].includes(value)) {
+            state.answers[code].push(value);
+        }
+    } else {
+        // remove value
+        state.answers[code] = state.answers[code].filter(v => v !== value);
+
+        // remove key entirely if empty
+        if (state.answers[code].length === 0) {
+            delete state.answers[code];
+        }
+    }
 }
 
 // ---------- Thank you ----------
@@ -123,6 +351,22 @@ function renderThankYou() {
 // init
 render();
 
+// =====================================================
+// AUTO-SYNC — retry sending stored responses
+// =====================================================
+
+window.addEventListener("online", () => {
+    console.log("Back online — syncing...");
+    syncOffline();
+	
+});
+
+// retry every 10 seconds
+setInterval(syncOffline, 10000);
+
+console.log("Offline queue:",
+    JSON.parse(localStorage.getItem("offlineQueue") || "[]").length
+);
 </script>
 
 </body>

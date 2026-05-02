@@ -31,3 +31,9 @@ test_*.py
 # Environment
 .env
 venv/
+__pycache__/
+*.pyc
+.env
+backend/kiosk.db
+backend/kiosk.db.backup
+*.log

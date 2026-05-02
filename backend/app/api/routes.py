@@ -259,6 +259,73 @@ def get_kiosk_questionnaire(code: str, db: Session = Depends(get_db)):
             for q in questionnaire.questions
         ]
      }
+@router.get("/by-code/{code}")
+def get_kiosk_by_code(
+    code: str,
+    db: Session = Depends(get_db)
+):
+    kiosk = (
+        db.query(Kiosk)
+        .filter(Kiosk.code == code)
+        .first()
+    )
+
+    if not kiosk:
+        raise HTTPException(
+            status_code=404,
+            detail="Kiosk not found"
+        )
+
+    questionnaire = None
+
+    if kiosk.questionnaire_id:
+
+        questionnaire = db.scalar(
+            select(Questionnaire)
+            .options(
+                selectinload(
+                    Questionnaire.questions
+                )
+            )
+            .where(
+                Questionnaire.id
+                == kiosk.questionnaire_id
+            )
+        )
+
+    return {
+        "id": kiosk.id,
+        "code": kiosk.code,
+        "name": kiosk.name,
+        "location": kiosk.location,
+        "is_active": kiosk.is_active,
+
+        "questionnaire": (
+            {
+                "id": questionnaire.id,
+                "code": questionnaire.code,
+                "name": questionnaire.name,
+                "is_active": questionnaire.is_active,
+
+                "questions": [
+                    {
+                        "id": q.id,
+                        "code": q.code,
+                        "order_no": q.order_no,
+                        "question_type": q.question_type,
+                        "text_i18n": q.text_i18n,
+                        "options_i18n": q.options_i18n,
+                        "is_required": q.is_required,
+                        "branching_rule": q.branching_rule,
+                    }
+                    for q in questionnaire.questions
+                ]
+            }
+            if questionnaire else None
+        )
+    }
+
+
 
 @router.get("/responses/export.csv")
 def export_responses_csv(

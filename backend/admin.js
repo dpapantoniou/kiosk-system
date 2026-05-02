@@ -1,6 +1,4 @@
 
-  <script>
-    const API = "/kiosk";
 async function login() {
     const username = document.getElementById("loginUser").value;
     const password = document.getElementById("loginPass").value;
@@ -16,9 +14,9 @@ async function login() {
     }
     document.getElementById("loginBox").style.display = "none";
     document.getElementById("adminApp").style.display = "block";
-    loadKiosks();
-    loadQuestionnaires();
-    loadResponses();
+        await loadQuestionnaires();
+		await loadKiosks();
+        await loadResponses();
 }
 async function checkAuth() {
     const res = await fetch(`${API}/auth/me`, {
@@ -27,14 +25,91 @@ async function checkAuth() {
     if (res.ok) {
         document.getElementById("loginBox").style.display = "none";
         document.getElementById("adminApp").style.display = "block";
-        loadKiosks();
-        loadQuestionnaires();
-        loadResponses();
+        await loadQuestionnaires();
+		await loadKiosks();
+        await loadResponses();
     } else {
         document.getElementById("loginBox").style.display = "block";
         document.getElementById("adminApp").style.display = "none";
     }
 }
+async function createKiosk() {
+
+  const code =
+    document.getElementById("kiosk_code")
+      .value.trim();
+
+  const name =
+    document.getElementById("kiosk_name")
+      .value.trim();
+
+  const location =
+    document.getElementById("kiosk_location")
+      .value.trim();
+
+  const isActive =
+    document.getElementById("kiosk_active")
+      .value === "true";
+
+  const resultBox =
+    document.getElementById("kiosk_create_result");
+
+  if (!code || !name) {
+
+    resultBox.innerText =
+      "Code and name are required.";
+
+    return;
+  }
+
+  resultBox.innerText = "Creating...";
+
+  try {
+
+    const res = await fetch(`${API}/kiosks`, {
+
+      method: "POST",
+
+      credentials: "include",
+
+      headers: {
+        "Content-Type": "application/json"
+      },
+
+      body: JSON.stringify({
+        code,
+        name,
+        location,
+        is_active: isActive
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+
+      resultBox.innerText =
+        `Error: ${JSON.stringify(data)}`;
+
+      return;
+    }
+
+    resultBox.innerText =
+      `Created kiosk ${data.code}`;
+
+    document.getElementById("kiosk_code").value = "";
+    document.getElementById("kiosk_name").value = "";
+    document.getElementById("kiosk_location").value = "";
+
+    await loadKiosks();
+
+  } catch (e) {
+
+    resultBox.innerText =
+      `Error: ${e.message}`;
+  }
+}
+
 async function logout() {
     await fetch(`${API}/auth/logout`, {
         method: "POST",
@@ -204,22 +279,33 @@ async function logout() {
         }
         const data = await res.json();
         kiosksCache = data;
-
+        const qMap = {};
+        questionnairesCache.forEach(q => {
+           qMap[q.id] = q;
+        });
         wrap.innerHTML = `
           <table>
             <thead>
               <tr>
-                <th>ID</th><th>Code</th><th>Name</th><th>Location</th><th>Questionnaire ID</th>
+                <th>Code</th>
+                <th>Name</th>
+                <th>Location</th>
+                <th>Questionnaire</th>
+                <th>Actions</th>				
               </tr>
             </thead>
             <tbody>
               ${data.map(k => `
                 <tr>
-                  <td>${k.id}</td>
                   <td>${k.code}</td>
                   <td>${k.name}</td>
                   <td>${k.location || ""}</td>
-                  <td>${k.questionnaire_id ?? ""}</td>
+                  <td>${qMap[k.questionnaire_id]?.code || ""}</td>
+				  <td>
+                     <button onclick="editKiosk(${k.id})">
+                       Edit
+                     </button>
+                  </td>
                 </tr>
               `).join("")}
             </tbody>
@@ -272,6 +358,122 @@ async function logout() {
         wrap.innerText = `Error: ${e.message}`;
       }
     }
+    function editKiosk(id) {
+
+      const kiosk =
+      kiosksCache.find(k => k.id === id);
+
+      if (!kiosk) return;
+
+      document.getElementById("edit_kiosk_card")
+        .style.display = "block";
+
+      document.getElementById("edit_kiosk_id")
+        .value = kiosk.id;
+
+      document.getElementById("edit_kiosk_code")
+        .value = kiosk.code;
+
+      document.getElementById("edit_kiosk_name")
+        .value = kiosk.name;
+
+      document.getElementById("edit_kiosk_location")
+        .value = kiosk.location || "";
+
+      document.getElementById("edit_kiosk_active")
+        .value = kiosk.is_active ? "true" : "false";
+
+      window.scrollTo({
+      top: 0,
+      behavior: "smooth"
+     });
+    }
+	
+    function cancelKioskEdit() {
+
+      document.getElementById("edit_kiosk_card")
+       .style.display = "none";
+
+      document.getElementById("edit_kiosk_result")
+       .innerText = "";
+    }
+
+    async function saveKioskEdit() {
+
+      const id =
+       document.getElementById("edit_kiosk_id").value;
+
+      const code =
+         document.getElementById("edit_kiosk_code")
+        .value.trim();
+
+      const name =
+         document.getElementById("edit_kiosk_name")
+        .value.trim();
+
+      const location =
+        document.getElementById("edit_kiosk_location")
+         .value.trim();
+
+      const isActive =
+        document.getElementById("edit_kiosk_active")
+         .value === "true";
+
+      const kiosk =
+        kiosksCache.find(k => k.id == id);
+
+      const questionnaireId =
+        kiosk?.questionnaire_id || null;
+
+      const resultBox =
+        document.getElementById("edit_kiosk_result");
+
+      try {
+
+         const res = await fetch(`${API}/kiosks/${id}`,
+           {
+             method: "PUT",
+
+             credentials: "include",
+
+             headers: {
+               "Content-Type": "application/json"
+             },
+
+             body: JSON.stringify({
+               code,
+               name,
+               location,
+               is_active: isActive,
+               questionnaire_id: questionnaireId
+             })
+        }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+
+      resultBox.innerText =
+        `Error: ${JSON.stringify(data)}`;
+
+      return;
+    }
+
+    resultBox.innerText =
+      "Kiosk updated successfully.";
+
+    cancelKioskEdit();
+	await loadKiosks();
+
+  } catch (e) {
+
+    resultBox.innerText =
+      `Error: ${e.message}`;
+  }
+}
+
+
 
     function fillAssignSelectors() {
       const kioskSel = document.getElementById("assign_kiosk");
@@ -282,7 +484,9 @@ async function logout() {
       ).join("");
 
       qSel.innerHTML = questionnairesCache.map(q =>
-        `<option value="${q.id}">${q.id} — ${q.code} — ${q.name}</option>`
+		 `<option value="${q.id}">
+           ${q.code} — ${q.name}
+         </option>`
       ).join("");
     }
 
@@ -290,6 +494,10 @@ async function logout() {
       const kioskId = parseInt(document.getElementById("assign_kiosk").value, 10);
       const questionnaireId = parseInt(document.getElementById("assign_questionnaire").value, 10);
       const kiosk = kiosksCache.find(k => k.id === kioskId);
+	  const selectedQuestionnaire =
+         questionnairesCache.find(
+           q => q.id === questionnaireId
+         );
       const resultBox = document.getElementById("assign_result");
 
       if (!kiosk || !questionnaireId) {
@@ -298,6 +506,7 @@ async function logout() {
       }
 
       const payload = {
+        code: kiosk.code,
         name: kiosk.name,
         location: kiosk.location,
         is_active: kiosk.is_active,
@@ -321,7 +530,7 @@ async function logout() {
           return;
         }
 
-        resultBox.innerText = `Assigned questionnaire ${questionnaireId} to kiosk ${kiosk.code}`;
+        resultBox.innerText = `Assigned ${selectedQuestionnaire.code} to kiosk ${kiosk.code}`;
         await loadKiosks();
       } catch (e) {
         resultBox.innerText = `Error: ${e.message}`;
@@ -340,6 +549,7 @@ async function logout() {
           return;
      }
         const data = await res.json();
+		data.reverse();
 
         wrap.innerHTML = `
           <table>
@@ -371,5 +581,17 @@ async function logout() {
     toggleOptionsArea();
     renderDraftQuestions();
     checkAuth();
-  </script>
+	
+	function showTab(tabId, buttonEl) {
+
+  document.querySelectorAll('.tab-content')
+    .forEach(el => el.style.display = 'none');
+
+  document.querySelectorAll('.tab-button')
+    .forEach(el => el.classList.remove('active'));
+
+  document.getElementById(tabId).style.display = 'block';
+
+  buttonEl.classList.add('active');
+}
   

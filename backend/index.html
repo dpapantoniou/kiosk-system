@@ -164,6 +164,72 @@
     </div>
 
     <div id="kiosks" class="tab-content" style="display:none;">	
+	<div class="card">
+
+    <h2>Create Kiosk</h2>
+
+    <label>Kiosk Code</label>
+    <input id="kiosk_code"
+         placeholder="e.g. NICOSIA-01">
+
+    <label>Kiosk Name</label>
+    <input id="kiosk_name"
+         placeholder="e.g. Nicosia District Court Kiosk 1">
+
+    <label>Location</label>
+    <input id="kiosk_location"
+         placeholder="e.g. Nicosia District Court">
+
+    <label>Active</label>
+    <select id="kiosk_active">
+      <option value="true" selected>true</option>
+      <option value="false">false</option>
+    </select>
+
+    <button onclick="createKiosk()">
+       Create Kiosk
+    </button>
+
+  <div id="kiosk_create_result"
+       class="muted"></div>
+
+</div>
+
+<div class="card" id="edit_kiosk_card" style="display:none;">
+
+  <h2>Edit Kiosk</h2>
+
+  <input type="hidden" id="edit_kiosk_id">
+
+  <label>Kiosk Code</label>
+  <input id="edit_kiosk_code">
+
+  <label>Kiosk Name</label>
+  <input id="edit_kiosk_name">
+
+  <label>Location</label>
+  <input id="edit_kiosk_location">
+
+  <label>Active</label>
+  <select id="edit_kiosk_active">
+    <option value="true">true</option>
+    <option value="false">false</option>
+  </select>
+
+  <button onclick="saveKioskEdit()">
+    Save Changes
+  </button>
+
+  <button class="secondary"
+          onclick="cancelKioskEdit()">
+    Cancel
+  </button>
+
+  <div id="edit_kiosk_result"
+       class="muted"></div>
+
+</div>
+	
     <div class="row">
       <div class="card">
         <h2>Kiosks</h2>

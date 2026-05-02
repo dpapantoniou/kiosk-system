@@ -60,7 +60,7 @@ let state = {
     screen: "idle",
     questionnaire: null,
     answers: {},
-    kioskCode: params.get("kioask") || "NICOSIA-01",
+    kioskCode: params.get("kiosk") || "NICOSIA-01",
     lang: "el"
 };
 // =====================================================
@@ -132,11 +132,14 @@ function setLang(lang) {
 // ---------- Survey ----------
 async function start() {
     try {
-        const res = await fetch(API + "/kiosks/" + state.kioskCode + "/questionnaire");
+		const res = await fetch(
+            API + "/by-code/" + state.kioskCode
+        );
+		
         if (!res.ok) throw new Error("Network error");
 
         const data = await res.json();
-        state.questionnaire = Array.isArray(data) ? data[0] : data;
+		state.questionnaire = data.questionnaire;
  // =====================================================
 // CACHE questionnaire for offline use
 // =====================================================
@@ -147,10 +150,31 @@ async function start() {
 
         render();
         resetIdleTimer();
-    } catch (e) {
-        document.getElementById("app").innerHTML =
-            `<h2>Service temporarily unavailable</h2>`;
     }
+catch (e) {
+    console.log("Offline — trying cached questionnaire");
+
+    try {
+        const cached = localStorage.getItem("cachedQuestionnaire");
+
+        if (!cached) throw new Error("No cache");
+
+        const parsed = JSON.parse(cached);
+
+        state.questionnaire = parsed;
+        state.answers = {};
+        state.screen = "survey";
+
+        render();
+        resetIdleTimer();
+
+    } catch (err) {
+        document.getElementById("app").innerHTML =
+            `<h2>Service unavailable (no cached data)</h2>`;
+    }
+}
+
+
 }
 
 let idleTimer;
@@ -253,11 +277,9 @@ function renderSurvey() {
 function answer(code, value) {
     state.answers[code] = value;
 }
-// ---------- Submit ----------
 // =====================================================
 // SUBMIT — supports offline fallback
 // =====================================================
-
 async function submit() {
     const btn = document.getElementById("submitBtn");
     if (btn) {
@@ -292,32 +314,19 @@ async function submit() {
 
         console.log("Submitted successfully");
 
+    } catch (e) {
+        console.log("Offline — storing response");
+        saveOffline(payload);
+    }
 
     state.screen = "thankyou";
     render();
-catch (e) {
-    console.log("Offline — trying cached questionnaire");
-    const cached = localStorage.getItem("cachedQuestionnaire");
 
-    if (cached) {
-        state.questionnaire = JSON.parse(cached);
-        state.answers = {};
-        state.screen = "survey";
-
-        render();
-        resetIdleTimer();
-    } else {
-        document.getElementById("app").innerHTML =
-            `<h2>Service unavailable (no cached data)</h2>`;
-    }
-}
     setTimeout(() => {
         state.screen = "idle";
         render();
     }, 3000);
 }
-
-
 
 function toggleAnswer(code, value, checked) {
     if (!state.answers[code]) {

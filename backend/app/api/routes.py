@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import func
+from datetime import datetime, timedelta
 from fastapi import Request
 from app.db.deps import get_db
 from app.models.kiosk import Kiosk
@@ -27,17 +29,25 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from app.models.admin_user import AdminUser, AdminSession
 from app.security import verify_password
+from openpyxl import Workbook
+from openpyxl.styles import Font
 
 class KioskUpdate(BaseModel):
     name: str | None = None
     location: str | None = None
     is_active: bool | None = None
     questionnaire_id: int | None = None
+
+class QuestionnaireUpdate(BaseModel):
+    code: str
+    name: str
+    is_active: bool
+    questions: list
     
 class LoginPayload(BaseModel):
     username: str
     password: str
-def require_admin(request: Request, db: Session = Depends(get_db)):
+def get_current_user(request: Request, db: Session = Depends(get_db)):
     token = request.cookies.get("pt_cxfp_session")
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -45,7 +55,7 @@ def require_admin(request: Request, db: Session = Depends(get_db)):
     session = db.query(AdminSession).filter(
        AdminSession.token == token
     ).first()
-     
+    
     if not session:
         raise HTTPException(status_code=401, detail="Invalid session")
 
@@ -54,7 +64,37 @@ def require_admin(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Inactive user")
 
     return user
+def require_admin(
+    user: AdminUser = Depends(get_current_user)
+):
 
+    if user.role not in [
+        "pt_admin",
+        "eu_admin"
+    ]:
+
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden"
+        )
+
+    return user
+def require_manager_or_admin(
+    user: AdminUser = Depends(get_current_user)
+):
+
+    if user.role not in [
+        "pt_admin",
+        "eu_admin",
+        "eu_manager"
+    ]:
+
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden"
+        )
+
+    return user
 
 Base.metadata.create_all(bind=engine)
 
@@ -100,7 +140,7 @@ def login(payload: LoginPayload, response: FastAPIResponse, db: Session = Depend
         "role": user.role,
     }
 @router.post("/auth/logout")
-def logout(request: Request, response: FastAPIResponse, db: Session = Depends(get_db), user: AdminUser = Depends(require_admin)):
+def logout(request: Request, response: FastAPIResponse, db: Session = Depends(get_db), user: AdminUser = Depends(require_manager_or_admin)):
     token = request.cookies.get("pt_cxfp_session")
 
     if token:
@@ -113,7 +153,7 @@ def logout(request: Request, response: FastAPIResponse, db: Session = Depends(ge
     return {"status": "ok"}
 
 @router.get("/auth/me")
-def me(user: AdminUser = Depends(require_admin)):
+def me(user: AdminUser = Depends(require_manager_or_admin)):
     return {
         "username": user.username,
         "role": user.role,
@@ -135,13 +175,13 @@ def update_kiosk(kiosk_id: int, payload: KioskUpdate, db: Session = Depends(get_
     return kiosk
 
 @router.get("/responses", response_model=List[ResponseRead])
-def list_responses(db: Session = Depends(get_db), user: AdminUser = Depends(require_admin)):
+def list_responses(db: Session = Depends(get_db), user: AdminUser = Depends(require_manager_or_admin)):
     return db.query(Response).all()
 
 @router.get("/kiosks", response_model=list[KioskRead])
 def list_kiosks(
     db: Session = Depends(get_db),
-    user: AdminUser = Depends(require_admin)
+    user: AdminUser = Depends(require_manager_or_admin)
 ):
     return db.scalars(select(Kiosk).order_by(Kiosk.id)).all()
 
@@ -159,7 +199,7 @@ def create_kiosk(payload: KioskCreate, db: Session = Depends(get_db), user: Admi
 
 
 @router.get("/questionnaires", response_model=list[QuestionnaireRead])
-def list_questionnaires(db: Session = Depends(get_db), user: AdminUser = Depends(require_admin)):
+def list_questionnaires(db: Session = Depends(get_db), user: AdminUser = Depends(require_manager_or_admin)):
     stmt = (
         select(Questionnaire)
         .options(selectinload(Questionnaire.questions))
@@ -202,6 +242,72 @@ def create_questionnaire(payload: QuestionnaireCreate, db: Session = Depends(get
         .options(selectinload(Questionnaire.questions))
         .where(Questionnaire.id == questionnaire.id)
     )
+@router.put(
+    "/questionnaires/{questionnaire_id}",
+    response_model=QuestionnaireRead
+)
+def update_questionnaire(
+    questionnaire_id: int,
+    payload: QuestionnaireCreate,
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_admin)
+):
+
+    questionnaire = db.get(
+        Questionnaire,
+        questionnaire_id
+    )
+
+    if not questionnaire:
+        raise HTTPException(
+            status_code=404,
+            detail="Questionnaire not found"
+        )
+
+    questionnaire.code = payload.code
+    questionnaire.name = payload.name
+    questionnaire.is_active = payload.is_active
+
+    # remove old questions
+    questionnaire.questions.clear()
+
+    db.flush()
+
+    # recreate questions
+    for q in payload.questions:
+
+        questionnaire.questions.append(
+            Question(
+                code=q.code,
+                order_no=q.order_no,
+                question_type=q.question_type,
+                text_i18n=q.text_i18n,
+                options_i18n=q.options_i18n,
+                is_required=q.is_required,
+                branching_rule=q.branching_rule,
+            )
+        )
+
+    db.add(questionnaire)
+
+    db.commit()
+
+    db.refresh(questionnaire)
+
+    return db.scalar(
+        select(Questionnaire)
+        .options(
+            selectinload(
+                Questionnaire.questions
+            )
+        )
+        .where(
+            Questionnaire.id
+            == questionnaire.id
+        )
+    )
+
+
 
 @router.post("/responses", response_model=ResponseRead)
 def submit_response(
@@ -330,7 +436,7 @@ def get_kiosk_by_code(
 @router.get("/responses/export.csv")
 def export_responses_csv(
     db: Session = Depends(get_db),
-    user: AdminUser = Depends(require_admin),
+    user: AdminUser = Depends(require_manager_or_admin),
 ):
     rows = db.query(Response).order_by(Response.created_at.desc()).all()
 
@@ -367,3 +473,126 @@ def export_responses_csv(
             "Content-Disposition": "attachment; filename=responses.csv"
         },
     )
+@router.get("/responses/export.xlsx")
+def export_responses_xlsx(
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_manager_or_admin),
+):
+    rows = (
+        db.query(Response)
+        .order_by(Response.created_at.desc())
+        .all()
+    )
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Responses"
+    headers = [
+        "id",
+        "created_at",
+        "kiosk_code",
+        "questionnaire_id",
+        "lang",
+        "client_ip",
+        "answers_json",
+    ]
+    ws.append(headers)
+    # bold header row
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+    for r in rows:
+        ws.append([
+            r.id,
+            str(r.created_at),
+            r.kiosk_code,
+            r.questionnaire_id,
+            getattr(r, "lang", ""),
+            getattr(r, "client_ip", ""),
+            str(r.answers),
+        ])
+    # auto column widths
+    for col in ws.columns:
+        max_len = 0
+        column = col[0].column_letter
+        for cell in col:
+            try:
+                max_len = max(
+                    max_len,
+                    len(str(cell.value))
+                )
+            except:
+                pass
+        adjusted = min(max_len + 2, 60)
+        ws.column_dimensions[column].width = adjusted
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type=(
+            "application/vnd.openxmlformats-"
+            "officedocument.spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition":
+                "attachment; filename=responses.xlsx"
+        },
+    )
+    
+@router.get("/analytics/summary")
+def analytics_summary(
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_manager_or_admin),
+):
+
+    total_responses = (
+        db.query(Response).count()
+    )
+
+    today = datetime.utcnow().date()
+
+    responses_today = (
+        db.query(Response)
+        .filter(
+            func.date(Response.created_at) == today
+        )
+        .count()
+    )
+
+    # rating averages
+    rating_values = []
+
+    rows = db.query(Response).all()
+
+    for r in rows:
+
+        if not r.answers:
+            continue
+
+        for v in r.answers.values():
+
+            if isinstance(v, int):
+                rating_values.append(v)
+
+    avg_rating = (
+        round(
+            sum(rating_values) / len(rating_values),
+            2
+        )
+        if rating_values else None
+    )
+
+    active_kiosks = (
+        db.query(Kiosk)
+        .filter(Kiosk.is_active == True)
+        .count()
+    )
+
+    offline_kiosks = 0
+
+    return {
+        "total_responses": total_responses,
+        "responses_today": responses_today,
+        "avg_rating": avg_rating,
+        "active_kiosks": active_kiosks,
+        "offline_kiosks": offline_kiosks,
+    }

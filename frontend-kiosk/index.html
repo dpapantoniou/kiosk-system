@@ -2,67 +2,30 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Kiosk</title>
-<style>
-body {
-    font-family: Arial, sans-serif;
-    background: #f5f7fa;
-    margin: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-}
+    <title>CX-FP Kiosk</title>
 
-#app {
-    width: 90%;
-    max-width: 600px;
-    text-align: center;
-}
-
-h1, h2 {
-    color: #2c3e50;
-}
-
-button {
-    width: 100%;
-    padding: 20px;
-    margin: 10px 0;
-    font-size: 24px;
-    border: none;
-    border-radius: 10px;
-    background-color: #3498db;
-    color: white;
-    cursor: pointer;
-}
-
-button:hover {
-    background-color: #2980b9;
-}
-
-input {
-    width: 100%;
-    padding: 15px;
-    font-size: 18px;
-}
-</style>
-	</head>
+    <link rel="stylesheet" href="kiosk.css">
+</head>
 
 <body>
 
-<div id="app"></div>
+<div class="wrap">
+    <div id="app"></div>
+</div>
 
 <script>
 const API = "/kiosk";
 const params = new URLSearchParams(window.location.search);
 
 let state = {
-    screen: "idle",
+    screen: "attract",
     questionnaire: null,
     answers: {},
-    kioskCode: params.get("kiosk") || "NICOSIA-01",
-    lang: "el"
+    kioskCode: params.get("kiosk") || "01",
+    lang: "el",
+    currentQuestionIndex: 0,
 };
+
 // =====================================================
 // OFFLINE SUPPORT — local queue storage
 // =====================================================
@@ -79,305 +42,844 @@ function saveOffline(payload) {
 }
 
 async function syncOffline() {
-    let queue = JSON.parse(localStorage.getItem("offlineQueue") || "[]");
+
+    let queue = JSON.parse(
+        localStorage.getItem("offlineQueue") || "[]"
+    );
 
     if (!queue.length) return;
 
-    console.log("Attempting sync of", queue.length, "offline responses");
+    console.log(
+        "Attempting sync of",
+        queue.length,
+        "offline responses"
+    );
 
     let remaining = [];
 
     for (const item of queue) {
-        try {
-            const res = await fetch(API + "/responses", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify(item)
-            });
 
-            if (!res.ok) throw new Error("Failed sync");
+        try {
+
+            const res = await fetch(
+                API + "/responses",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(item)
+                }
+            );
+
+            if (!res.ok)
+                throw new Error("Failed sync");
 
         } catch {
             remaining.push(item);
         }
     }
 
-    localStorage.setItem("offlineQueue", JSON.stringify(remaining));
-    console.log("Sync complete. Remaining:", remaining.length);
+    localStorage.setItem(
+        "offlineQueue",
+        JSON.stringify(remaining)
+    );
+
+    console.log(
+        "Sync complete. Remaining:",
+        remaining.length
+    );
 }
 
-// ---------- Screens ----------
+// =====================================================
+// SCREEN RENDERING
+// =====================================================
 
 function render() {
-    if (state.screen === "idle") renderIdle();
-    if (state.screen === "survey") renderSurvey();
-    if (state.screen === "thankyou") renderThankYou();
+
+    if (state.screen === "attract")
+        renderAttract();
+
+    if (state.screen === "language")
+        renderLanguage();
+
+    if (state.screen === "survey")
+        renderSurvey();
+
+    if (state.screen === "thankyou")
+        renderThankYou();
 }
 
-// ---------- Idle ----------
-function renderIdle() {
-    document.getElementById("app").innerHTML = `
-        <h1>Tell us about your experience</h1>
+// =====================================================
+// IDLE SCREEN
+// =====================================================
 
-        <button onclick="setLang('el')">Ελληνικά</button>
-        <button onclick="setLang('en')">English</button>
-        <button onclick="setLang('tr')">Türkçe</button>
+function renderAttract() {
+
+    document.getElementById("app").innerHTML = `
+        <div class="card attract-screen"
+             onclick="showLanguageSelection()">
+
+            <div class="attract-marquee">
+
+                <div class="attract-line">
+                    Your Opinion Counts
+                </div>
+
+                <div class="attract-line">
+                    Η Γνώμη σας Μετράει
+                </div>
+
+                <div class="attract-line">
+                    Görüşünüz Önemlidir
+                </div>
+
+            </div>
+
+            <p class="touch-prompt">
+                Touch screen to begin
+            </p>
+
+        </div>
     `;
 }
+
+function showLanguageSelection() {
+
+    state.screen = "language";
+    render();
+}
+
+function renderLanguage() {
+
+    document.getElementById("app").innerHTML = `
+        <div class="card">
+
+            <div class="thank-you">
+
+                <h1>
+                    Select Language
+                </h1>
+
+            </div>
+
+            <div class="lang-grid">
+
+                <button class="lang-button"
+                        onclick="setLang('el')">
+                    Ελληνικά
+                </button>
+
+                <button class="lang-button"
+                        onclick="setLang('en')">
+                    English
+                </button>
+
+                <button class="lang-button"
+                        onclick="setLang('tr')">
+                    Türkçe
+                </button>
+
+            </div>
+
+        </div>
+    `;
+}
+
+
 
 function setLang(lang) {
     state.lang = lang;
     start();
 }
-// ---------- Survey ----------
+
+// =====================================================
+// START QUESTIONNAIRE
+// =====================================================
+
 async function start() {
+
     try {
-		const res = await fetch(
+
+        const res = await fetch(
             API + "/by-code/" + state.kioskCode
         );
-		
-        if (!res.ok) throw new Error("Network error");
+
+        if (!res.ok)
+            throw new Error("Network error");
 
         const data = await res.json();
-		state.questionnaire = data.questionnaire;
- // =====================================================
-// CACHE questionnaire for offline use
-// =====================================================
-        localStorage.setItem("cachedQuestionnaire", JSON.stringify(state.questionnaire));       
-		
-		state.answers = {};
-        state.screen = "survey";
 
-        render();
-        resetIdleTimer();
-    }
-catch (e) {
-    console.log("Offline — trying cached questionnaire");
+        state.questionnaire = data.questionnaire;
 
-    try {
-        const cached = localStorage.getItem("cachedQuestionnaire");
+        // cache questionnaire
+        localStorage.setItem(
+            "cachedQuestionnaire",
+            JSON.stringify(state.questionnaire)
+        );
 
-        if (!cached) throw new Error("No cache");
-
-        const parsed = JSON.parse(cached);
-
-        state.questionnaire = parsed;
         state.answers = {};
-        state.screen = "survey";
+        state.currentQuestionIndex = 0;
+		state.screen = "survey";
 
         render();
         resetIdleTimer();
 
-    } catch (err) {
-        document.getElementById("app").innerHTML =
-            `<h2>Service unavailable (no cached data)</h2>`;
+    } catch (e) {
+
+        console.log(
+            "Offline — trying cached questionnaire"
+        );
+
+        try {
+
+            const cached = localStorage.getItem(
+                "cachedQuestionnaire"
+            );
+
+            if (!cached)
+                throw new Error("No cache");
+
+            state.questionnaire = JSON.parse(cached);
+
+            state.answers = {};
+            state.screen = "survey";
+
+            render();
+            resetIdleTimer();
+
+        } catch (err) {
+
+            document.getElementById("app").innerHTML = `
+                <div class="card">
+                    <div class="thank-you">
+                        <h1>Service unavailable</h1>
+                        <p>No cached questionnaire available</p>
+                    </div>
+                </div>
+            `;
+        }
     }
 }
 
-
-}
+// =====================================================
+// IDLE TIMER
+// =====================================================
 
 let idleTimer;
-
+let nextQuestionTimer = null;
 function resetIdleTimer() {
     clearTimeout(idleTimer);
+    let timeoutMs = 60000;
+    if (
+        state.screen === "survey" &&
+        state.questionnaire
+    ) {
+        const questions =
+            [...state.questionnaire.questions]
+                .sort(
+                    (a,b) =>
+                        a.order_no - b.order_no
+                );
+        const currentQuestion =
+            questions[
+                state.currentQuestionIndex
+            ];
+        if (
+            currentQuestion &&
+            currentQuestion.question_type === "text"
+        ) {
+            timeoutMs = 180000;
+        }
+    }
     idleTimer = setTimeout(() => {
-        state.screen = "idle";
+        state.screen = "attract";
         render();
-    }, 60000); // 60 sec
+    }, timeoutMs);
 }
 
-document.addEventListener("click", resetIdleTimer);
-document.addEventListener("touchstart", resetIdleTimer);
+document.addEventListener(
+    "click",
+    resetIdleTimer
+);
 
+document.addEventListener(
+    "touchstart",
+    resetIdleTimer
+);
 
+// =====================================================
+// BRANCHING
+// =====================================================
+
+function shouldShowQuestion(question) {
+
+    if (!question.branching_rule)
+        return true;
+
+    const rule = question.branching_rule;
+
+    const priorAnswer =
+        state.answers[rule.depends_on];
+
+    if (
+        priorAnswer === undefined ||
+        priorAnswer === null
+    ) {
+        return false;
+    }
+
+    const allowed =
+        rule.equals_any || [];
+
+    if (Array.isArray(priorAnswer)) {
+
+        return priorAnswer.some(v =>
+            allowed.includes(String(v))
+        );
+    }
+
+    return allowed.includes(
+        String(priorAnswer)
+    );
+}
+
+// =====================================================
+// SURVEY RENDERING
+// =====================================================
 
 function renderSurvey() {
+
     const q = state.questionnaire;
-	if (!q || !q.questions) {
-        document.getElementById("app").innerHTML =
-        `<h2>No questionnaire available</h2>`;
-         return;
-    }
 
-	
-    let html = `<h2>${q.name}</h2>`;
-    // sort by order_no (important)
-    q.questions.sort((a, b) => a.order_no - b.order_no);	
-    q.questions.forEach(question => {
-      const text = question.text_i18n[state.lang] || question.text_i18n['en'];
-      html += `<div><p>${text}</p>`;
+    if (!q || !q.questions) {
 
-      // ---------- RATING ----------
-     if (question.question_type === "rating") {
-        html += `<div style="display:flex; gap:10px;">`;
-        for (let i = 1; i <= 5; i++) {
-            html += `
-                <button 
-                    style="flex:1;" 
-                    data-q="${question.code}"
-                    onclick="
-                        document.querySelectorAll('[data-q=&quot;${question.code}&quot;]')
-                            .forEach(b => b.style.background='');
-                        this.style.background='green';
-                        answer('${question.code}', ${i});
-                    ">
-                    ${i}
-                </button>
-        `   ;
-        }
-        html += `</div>`;
-     }
-
-       // ---------- TEXT ----------
-       if (question.question_type === "text") {
-         html += `<input type="text" onchange="answer('${question.code}', this.value); this.style.background='green'" />`;
-       }
-
-       // ---------- SINGLE CHOICE ----------
-       if (question.question_type === "single_choice") {
-           const opts = (question.options_i18n && 
-                        (question.options_i18n[state.lang] || question.options_i18n['en'])) || [];
-          opts.forEach(opt => {
-            html += `
-                <div>
-                    <label>
-                        <input type="radio" name="${question.code}" 
-                            onchange="answer('${question.code}', '${opt}')">
-                        ${opt}
-                    </label>
+        document.getElementById("app").innerHTML = `
+            <div class="card">
+                <div class="thank-you">
+                    <h1>No questionnaire available</h1>
                 </div>
-            `;
-            });
-        }
- 
-       // ---------- MULTI CHOICE ----------
-       if (question.question_type === "multi_choice") {
-           const opts = (question.options_i18n && 
-                       (question.options_i18n[state.lang] || question.options_i18n['en'])) || [];
-          opts.forEach(opt => {
-            html += `
-                <div>
-                    <label>
-                        <input type="checkbox" 
-                            onchange="toggleAnswer('${question.code}', '${opt}', this.checked)">
-                        ${opt}
-                    </label>
-                </div>
-            `;
-           });
-        }
+            </div>
+        `;
 
-        html += `</div><br>`;
-});	
-	
-    html += `<br><button id="submitBtn" onclick="submit()">Submit</button>`;
-    document.getElementById("app").innerHTML = html;
-}
-function answer(code, value) {
-    state.answers[code] = value;
-}
-// =====================================================
-// SUBMIT — supports offline fallback
-// =====================================================
-async function submit() {
-    const btn = document.getElementById("submitBtn");
-    if (btn) {
-        btn.disabled = true;
-        btn.innerText = "Submitting...";
-    }
-
-    if (Object.keys(state.answers).length === 0) {
-        alert("Please answer at least one question");
-        if (btn) {
-            btn.disabled = false;
-            btn.innerText = "Submit";
-        }
         return;
     }
 
-    const payload = {
-        questionnaire_id: state.questionnaire.id,
-        kiosk_code: state.kioskCode,
-        answers: state.answers,
-        lang: state.lang || "el"
-    };
+    let html = `
 
-    try {
-        const res = await fetch(API + "/responses", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify(payload)
-        });
+        <div class="language-bar">
 
-        if (!res.ok) throw new Error("Network error");
+			<button
+				class="${
+					state.lang === 'el'
+					? 'selected-lang'
+					: ''
+					}"
+				onclick="setLang('el')"
+					>
+                EL
+            </button>
 
-        console.log("Submitted successfully");
+			<button
+				class="${
+					state.lang === 'en'
+					? 'selected-lang'
+					: ''
+					}"
+				onclick="setLang('en')"
+					>			
+                EN
+            </button>
 
-    } catch (e) {
-        console.log("Offline — storing response");
-        saveOffline(payload);
-    }
+			<button
+				class="${
+					state.lang === 'tr'
+					? 'selected-lang'
+					: ''
+					}"
+				onclick="setLang('tr')"
+					>						
+                TR
+            </button>
 
-    state.screen = "thankyou";
-    render();
+        </div>
 
-    setTimeout(() => {
-        state.screen = "idle";
-        render();
-    }, 3000);
+        <div class="card">
+
+    `;
+
+  const questions =
+    [...q.questions]
+        .sort(
+            (a,b) =>
+                a.order_no - b.order_no
+        );
+
+const question =
+    questions[
+        state.currentQuestionIndex
+    ];
+	
+	console.log(
+    "Displaying:",
+    question.code
+   );
+	
+    if (!question) {
+
+    state.currentQuestionIndex = 0;
+
+    return renderSurvey();
+}
+  
+        const text =
+            question.text_i18n[state.lang] ||
+            question.text_i18n['en'];
+        html += `
+            <div class="question-block">
+                <div class="question-text">
+                    ${text}
+                </div>
+        `;
+        // =============================================
+        // RATING
+        // =============================================
+        if (question.question_type === "rating") {
+            html += `<div class="rating-grid">`;
+            for (let i = 1; i <= 5; i++) {
+                const selected =
+                    state.answers[question.code] === i
+                        ? "selected"
+                        : "";
+                html += `
+                    <button
+                        class="rating-button ${selected}"
+                        onclick="
+                            answer('${question.code}', ${i});
+                            renderSurvey();
+                        "
+                    >
+                        ${i}
+                    </button>
+                `;
+            }
+            html += `</div>`;
+        }
+        // =============================================
+        // TEXT
+        // =============================================
+        if (question.question_type === "text") {
+            html += `
+                <textarea
+				    lang="${state.lang}"
+                    onchange="
+                        answer(
+                            '${question.code}',
+                            this.value
+                        )
+                    "
+                    placeholder="your comments"
+                >${
+                    state.answers[question.code] || ""
+                }</textarea>
+            `;
+        }
+        // =============================================
+        // SINGLE CHOICE
+        // =============================================
+    if (question.question_type === "single_choice") {
+
+    const opts = (
+        question.options_i18n &&
+        (
+            question.options_i18n[state.lang] ||
+            question.options_i18n['en']
+        )
+    ) || [];
+
+    html += `<div class="choice-list">`;
+
+    opts.forEach(opt => {
+
+        const checked =
+            state.answers[question.code] === opt
+                ? "checked"
+                : "";
+
+        html += `
+
+            <label class="choice-option">
+
+                <input
+                    type="radio"
+                    name="${question.code}"
+                    ${checked}
+                    onchange="
+                        answer(
+                            '${question.code}',
+                            '${opt}'
+                        );
+                        renderSurvey();
+                    "
+                >
+
+                ${opt}
+
+            </label>
+        `;
+    });
+
+    html += `</div>`;
+}
+        // =============================================
+        // MULTI CHOICE
+        // =============================================
+        if (question.question_type === "multi_choice") {
+            const opts = (
+                question.options_i18n &&
+                (
+                    question.options_i18n[state.lang] ||
+                    question.options_i18n['en']
+                )
+            ) || [];
+            html += `<div class="choice-list">`;
+            opts.forEach(opt => {
+                const checked =
+                    (
+                        state.answers[question.code] || []
+                    ).includes(opt)
+                        ? "checked"
+                        : "";
+                html += `
+                    <label class="choice-option">
+                        <input
+                            type="checkbox"
+                            ${checked}
+                            onchange="
+                                toggleAnswer(
+                                    '${question.code}',
+                                    '${opt}',
+                                    this.checked
+                                );
+                                renderSurvey();
+                            "
+                        >
+                        ${opt}
+                    </label>
+                `;
+            });
+            html += `</div>`;
+        }
+        html += `</div>`;
+
+    html += `
+
+        <div class="navigation">
+
+            <button
+                id="submitBtn"
+                onclick="submitCurrentQuestion()"
+            >
+                Submit
+            </button>
+
+        </div>
+
+        </div>
+    `;
+
+    document.getElementById("app").innerHTML = html;
+}
+
+// =====================================================
+// ANSWER STORAGE
+// =====================================================
+
+function answer(code, value) {
+    state.answers[code] = value;
 }
 
 function toggleAnswer(code, value, checked) {
+
     if (!state.answers[code]) {
         state.answers[code] = [];
     }
 
     if (checked) {
-        // prevent duplicates
+
         if (!state.answers[code].includes(value)) {
             state.answers[code].push(value);
         }
-    } else {
-        // remove value
-        state.answers[code] = state.answers[code].filter(v => v !== value);
 
-        // remove key entirely if empty
+    } else {
+
+        state.answers[code] =
+            state.answers[code].filter(
+                v => v !== value
+            );
+
         if (state.answers[code].length === 0) {
             delete state.answers[code];
         }
     }
 }
+function nextQuestion() {
+  const questions =
+    [...state.questionnaire.questions]
+        .sort(
+            (a,b) =>
+                a.order_no - b.order_no
+        );
+    let nextIndex =
+        state.currentQuestionIndex + 1;
+    while (nextIndex < questions.length) {
+        const candidate =
+            questions[nextIndex];
+        if (
+            shouldShowQuestion(candidate)
+        ) {
+            state.currentQuestionIndex =
+                nextIndex;
+            renderSurvey();
+           return;
+        }
+        nextIndex++;
+    }
+  finalizeQuestionnaire();
+}
 
-// ---------- Thank you ----------
+
+function prevQuestion() {
+   const questions =
+    [...state.questionnaire.questions]
+        .sort(
+            (a,b) =>
+                a.order_no - b.order_no
+        );
+    let prevIndex =
+        state.currentQuestionIndex - 1;
+    while (prevIndex >= 0) {
+        const candidate =
+            questions[prevIndex];
+        if (
+            shouldShowQuestion(candidate)
+        ) {
+            state.currentQuestionIndex =
+                prevIndex;
+            renderSurvey();
+            return;
+        }
+
+        prevIndex--;
+    }
+}
+// =====================================================
+// SUBMIT
+// =====================================================
+function submitCurrentQuestion() {
+
+    const questions =
+        [...state.questionnaire.questions]
+            .sort(
+                (a,b) =>
+                    a.order_no - b.order_no
+            );
+
+    const currentQuestion =
+        questions[
+            state.currentQuestionIndex
+        ];
+
+    const ans =
+        state.answers[currentQuestion.code];
+
+    if (
+        currentQuestion.is_required &&
+        (
+            ans === undefined ||
+            ans === null ||
+            ans.length === 0
+        )
+    ) {
+
+        alert(
+            "Please answer the question"
+        );
+
+        return;
+    }
+
+    const btn =
+        document.getElementById("submitBtn");
+
+    if (btn) {
+
+        btn.disabled = true;
+
+        btn.innerText = "Saving...";
+    }
+
+    let nextIndex =
+        state.currentQuestionIndex + 1;
+
+    while (nextIndex < questions.length) {
+
+        const candidate =
+            questions[nextIndex];
+
+        if (
+            shouldShowQuestion(candidate)
+        ) {
+
+            setTimeout(() => {
+
+                state.currentQuestionIndex =
+                    nextIndex;
+
+                renderSurvey();
+
+            }, 1000);
+
+            return;
+        }
+
+        nextIndex++;
+    }
+
+    setTimeout(() => {
+
+        finalizeQuestionnaire();
+
+    }, 1000);
+}
+
+async function finalizeQuestionnaire() {
+
+    const btn =
+        document.getElementById("submitBtn");
+
+    if (btn) {
+
+        btn.disabled = true;
+
+        btn.innerText = "Submitting...";
+    }
+
+    const payload = {
+
+        questionnaire_id:
+            state.questionnaire.id,
+
+        kiosk_code:
+            state.kioskCode,
+
+        answers:
+            state.answers,
+
+        lang:
+            state.lang || "el"
+    };
+
+    try {
+
+        const res = await fetch(
+            API + "/responses",
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body:
+                    JSON.stringify(payload)
+            }
+        );
+
+        if (!res.ok)
+            throw new Error("Network error");
+
+        console.log(
+            "Submitted successfully"
+        );
+
+    } catch (e) {
+
+        console.log(
+            "Offline — storing response"
+        );
+
+        saveOffline(payload);
+    }
+
+    state.screen = "thankyou";
+
+    render();
+
+    setTimeout(() => {
+
+        state.screen = "attract";
+
+        render();
+
+    }, 3000);
+}
+
+// =====================================================
+// THANK YOU SCREEN
+// =====================================================
 
 function renderThankYou() {
+
     document.getElementById("app").innerHTML = `
-        <h2>Thank you!</h2>
+
+        <div class="card">
+
+            <div class="thank-you">
+
+                <h1>Thank you!</h1>
+
+                <p>
+                    Your feedback has been recorded.
+                </p>
+
+            </div>
+
+        </div>
     `;
 }
 
-// init
+// =====================================================
+// INIT
+// =====================================================
+
 render();
 
 // =====================================================
-// AUTO-SYNC — retry sending stored responses
+// AUTO SYNC
 // =====================================================
 
 window.addEventListener("online", () => {
-    console.log("Back online — syncing...");
+
+    console.log(
+        "Back online — syncing..."
+    );
+
     syncOffline();
-	
 });
 
-// retry every 10 seconds
 setInterval(syncOffline, 10000);
 
-console.log("Offline queue:",
-    JSON.parse(localStorage.getItem("offlineQueue") || "[]").length
+console.log(
+    "Offline queue:",
+    JSON.parse(
+        localStorage.getItem("offlineQueue") || "[]"
+    ).length
 );
+
 </script>
 
 </body>
 </html>
-
+```

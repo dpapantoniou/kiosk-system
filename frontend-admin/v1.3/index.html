@@ -76,28 +76,29 @@
     <h1>Kiosk Admin</h1>
     <button onclick="logout()">Logout</button>
   </div>
- 
+  
   <div class="tabs">
   <button class="tab-button active"
           onclick="showTab('questionnaires', this)">
     Questionnaires
   </button>
+
   <button class="tab-button"
           onclick="showTab('kiosks', this)">
     Kiosks
   </button>
+
   <button class="tab-button"
           onclick="showTab('responses', this)">
     Responses
   </button>
-  <button
-    class="tab-button"
-    onclick="showTab('analytics_tab', this)">
-    Analytics
-   </button>
-   </div>
-   
-   
+
+  <button class="tab-button"
+          onclick="showTab('antiabuse', this)">
+    Anti-Abuse
+  </button>
+  </div>
+  
   <div id="questionnaires" class="tab-content">
 	
     <div class="card">
@@ -115,9 +116,7 @@
         <option value="false">false</option>
       </select>
 
-		<h3 id="question_form_title">
-			Add Question
-		</h3>
+      <h3>Add Question</h3>
 
       <label>Question Code</label>
       <input id="question_code" placeholder="e.g. Q1">
@@ -159,60 +158,13 @@
         <option value="true">true</option>
       </select>
 
-	<h3>Branching Rule (Optional)</h3>
-
-	<label>Depends On Question Code</label>
-	<select id="branch_depends_on">
-		<option value="">
-        -- none --
-		</option>
-	</select>
-
-	<label>
-    Show If Answer Equals Any Of
-    (comma separated)
-    </label>
-	
-	<input
-		id="branch_equals"
-		placeholder="e.g. No"
-	>
-
-
-      <button
-       id="add_question_btn"
-       onclick="addQuestion()"
-      >
-       Add Question
-      </button>
-	  
+      <button onclick="addQuestion()">Add Question</button>
       <button class="secondary" onclick="resetQuestionForm()">Clear Question Form</button>
 
       <div id="questions_preview"></div>
 
-	  <button
-        id="create_questionnaire_btn"
-        onclick="createQuestionnaire()"
-      >
-        Create Questionnaire
-      </button>
-  
+      <button onclick="createQuestionnaire()">Create Questionnaire</button>
       <div id="create_result" class="muted"></div>
-	</div>
-	
-	<div class="card">
-
-      <h2>Questionnaires</h2>
-
-      <button onclick="loadQuestionnaires()">
-         Refresh Questionnaires
-      </button>
-
-      <div id="questionnaires_list"
-           class="muted">
-      </div>
-    </div>  
-   
     </div>
     </div>
 
@@ -282,33 +234,48 @@
        class="muted"></div>
 
 </div>
-		<div class="card">
+	
+    <div class="row">
+      <div class="card">
+        <h2>Kiosks</h2>
+        <button onclick="loadKiosks()">Refresh Kiosks</button>
+        <div id="kiosks_list" class="muted"></div>
+      </div>
 
-		<h2>Kiosks</h2>
-
-		<button onclick="loadKiosks()">
-			Refresh Kiosks
-	    </button>
-
-		<div id="kiosks_list"
-			class="muted">
-		</div>
-
-	</div>
+      <div class="card">
+        <h2>Questionnaires</h2>
+        <button onclick="loadQuestionnaires()">Refresh Questionnaires</button>
+        <div id="questionnaires_list" class="muted"></div>
+      </div>
+    </div>
 
     <div class="card">
       <h2>Assign Questionnaire to Kiosk</h2>
 
-      <label>Select Kiosk</label>
-      <select id="assign_kiosk"></select>
+<label>Select Kiosk(s)</label>
 
-      <label>Select Questionnaire</label>
-      <select id="assign_questionnaire"></select>
+<select
+    id="assign_kiosk"
+    multiple
+    size="8"
+    style="width:100%; min-height:180px;">
+</select>
 
-      <button onclick="assignQuestionnaire()">Assign</button>
-      <div id="assign_result" class="muted"></div>
-	  
-	  
+<div class="muted"
+     style="margin-top:6px; margin-bottom:12px;">
+
+  Hold Ctrl (or Cmd on Mac) to select multiple kiosks
+
+</div>
+
+<label>Select Questionnaire</label>
+<select id="assign_questionnaire"></select>
+
+<button onclick="assignQuestionnaire()">
+  Assign to Selected Kiosks
+</button>
+
+<div id="assign_result" class="muted"></div>
     </div>
     </div>
 	
@@ -317,32 +284,53 @@
       <h2>Responses</h2>
       <button onclick="loadResponses()">Refresh Responses</button>
       <div id="responses_list" class="muted"></div>
+	  
 	  <button onclick="downloadCsv()">Export CSV</button>
-	  <button onclick="exportResponsesXlsx()">Export Excel</button>
-      </div>
+	  
+    </div>
 	</div>
 
-<div id="analytics_tab" class="tab-content" style="display:none;">
-    <h2>Analytics & Reports</h2>
-    <div class="toolbar">
-        <button onclick="loadAnalyticsSummary()">
-            Refresh Analytics
-        </button>
-        <button onclick="downloadCsv()">
-            Export CSV
-        </button>
-        <button onclick="exportResponsesXlsx()">
-            Export Excel
-        </button>
-        <button onclick="exportAnalyticsPdf()">
-            Export PDF Report
-        </button>
-    </div>
-    <div id="analytics_summary">
-        Loading analytics...
-    </div>
-</div>
+    <div id="antiabuse" class="tab-content" style="display:none;">
+      <div class="card">
+        <h2>Anti-Abuse Settings</h2>
 
+        <label>Enabled</label>
+        <select id="aa_enabled">
+          <option value="true">true</option>
+          <option value="false">false</option>
+        </select>
+
+        <label>Cooldown seconds</label>
+        <input id="aa_cooldown_seconds" type="number" min="0" max="3600">
+
+        <label>Rapid-repeat threshold</label>
+        <input id="aa_repeat_threshold" type="number" min="1" max="1000">
+
+        <label>Rapid-repeat window seconds</label>
+        <input id="aa_repeat_window_seconds" type="number" min="1" max="86400">
+
+        <label>Identical-pattern threshold</label>
+        <input id="aa_identical_pattern_threshold" type="number" min="1" max="1000">
+
+        <label>Hard block during cooldown</label>
+        <select id="aa_hard_block_on_cooldown">
+          <option value="true">true</option>
+          <option value="false">false</option>
+        </select>
+
+        <button onclick="loadAntiAbuseSettings()">Load Settings</button>
+        <button onclick="saveAntiAbuseSettings()">Save Settings</button>
+
+        <div id="antiabuse_settings_result" class="muted"></div>
+      </div>
+
+      <div class="card">
+        <h2>Anti-Abuse Events</h2>
+        <button onclick="loadAntiAbuseEvents()">Refresh Events</button>
+        <div id="antiabuse_events_list" class="muted"></div>
+      </div>
+    </div>
+	
   </div>
 </div>
 <script>

@@ -1,0 +1,6 @@
+{
+  "heartbeat_interval_minutes": 30,
+  "online_threshold_minutes": 45,
+  "stale_threshold_minutes": 65,
+  "offline_threshold_minutes": 90
+}

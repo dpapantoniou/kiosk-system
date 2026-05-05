@@ -1,36 +1,56 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
-from sqlalchemy import func
-from datetime import datetime, timedelta
-from fastapi import Request
-from app.db.deps import get_db
-from app.models.kiosk import Kiosk
-from app.models.questionnaire import Questionnaire
-
-from typing import List  
-from app.models.response import Response
-from app.schemas.response import ResponseCreate, ResponseRead
-
-from app.db.deps import get_db
-from app.db.base import Base
-from app.db.session import engine
-from app.models.kiosk import Kiosk
-from app.models.questionnaire import Questionnaire, Question
-from app.schemas.kiosk import KioskCreate, KioskRead
-from app.schemas.questionnaire import QuestionnaireCreate, QuestionnaireRead
-from pydantic import BaseModel
-
 import csv
 import io
 import secrets
-from fastapi import Response as FastAPIResponse
+from datetime import datetime
+from typing import List
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response as FastAPIResponse, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from app.models.admin_user import AdminUser, AdminSession
-from app.security import verify_password
 from openpyxl import Workbook
 from openpyxl.styles import Font
+from pydantic import BaseModel
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
+
+from app.db.base import Base
+from app.db.deps import get_db
+from app.db.session import engine
+from app.models.admin_user import AdminSession, AdminUser
+from app.models.anti_abuse import AntiAbuseEvent
+from app.models.kiosk import Kiosk
+from app.models.kiosk_monitoring import KioskStatus
+from app.models.questionnaire import Question, Questionnaire
+from app.models.response import Response
+from app.schemas.anti_abuse import (
+    AntiAbuseEventRead,
+    AntiAbuseSettingsRead,
+    AntiAbuseSettingsUpdate,
+)
+from app.schemas.kiosk import KioskCreate, KioskRead
+from app.schemas.kiosk_monitoring import (
+    HeartbeatConfigRead,
+    HeartbeatPayload,
+    HeartbeatResponse,
+    KioskStatusRead,
+)
+from app.schemas.questionnaire import QuestionnaireCreate, QuestionnaireRead
+from app.schemas.response import ResponseCreate, ResponseRead
+from app.security import verify_password
+from app.services.anti_abuse import (
+    enforce_before_submission,
+    evaluate_after_submission,
+    get_or_create_settings,
+)
+from app.services.kiosk_monitoring import (
+    evaluate_status,
+    load_heartbeat_config,
+    record_kiosk_activity,
+)
+
+
+class BulkAssignRequest(BaseModel):
+    questionnaire_id: int
+    kiosk_ids: list[int]
 
 class KioskUpdate(BaseModel):
     name: str | None = None
@@ -178,6 +198,114 @@ def update_kiosk(kiosk_id: int, payload: KioskUpdate, db: Session = Depends(get_
 def list_responses(db: Session = Depends(get_db), user: AdminUser = Depends(require_manager_or_admin)):
     return db.query(Response).all()
 
+
+@router.get("/anti-abuse/settings", response_model=AntiAbuseSettingsRead)
+def read_anti_abuse_settings(
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_manager_or_admin),
+):
+    return get_or_create_settings(db)
+
+
+@router.put("/anti-abuse/settings", response_model=AntiAbuseSettingsRead)
+def update_anti_abuse_settings(
+    payload: AntiAbuseSettingsUpdate,
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_admin),
+):
+    settings = get_or_create_settings(db)
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(settings, key, value)
+    db.add(settings)
+    db.commit()
+    db.refresh(settings)
+    return settings
+
+
+@router.get("/anti-abuse/events", response_model=list[AntiAbuseEventRead])
+def list_anti_abuse_events(
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_manager_or_admin),
+):
+    safe_limit = max(1, min(limit, 500))
+    return (
+        db.query(AntiAbuseEvent)
+        .order_by(AntiAbuseEvent.created_at.desc())
+        .limit(safe_limit)
+        .all()
+    )
+
+
+@router.get("/monitoring/config", response_model=HeartbeatConfigRead)
+def read_monitoring_config():
+    return load_heartbeat_config()
+
+
+@router.post("/kiosks/heartbeat", response_model=HeartbeatResponse)
+def receive_kiosk_heartbeat(
+    payload: HeartbeatPayload,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    kiosk = db.query(Kiosk).filter(Kiosk.code == payload.kiosk_code).first()
+    if not kiosk:
+        raise HTTPException(status_code=404, detail="Kiosk not found")
+
+    client_ip = request.client.host if request.client else None
+    status_row = record_kiosk_activity(
+        db,
+        kiosk_code=payload.kiosk_code,
+        activity_type="heartbeat",
+        client_ip=client_ip,
+        app_version=payload.app_version,
+        device_name=payload.device_name,
+        device_info=payload.device_info,
+    )
+    db.commit()
+    db.refresh(status_row)
+
+    config = load_heartbeat_config()
+    return {
+        "status": "ok",
+        "kiosk_code": payload.kiosk_code,
+        "heartbeat_interval_minutes": config["heartbeat_interval_minutes"],
+        "received_at": status_row.last_heartbeat,
+    }
+
+
+@router.get("/kiosks/status", response_model=list[KioskStatusRead])
+def list_kiosk_statuses(
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_manager_or_admin),
+):
+    config = load_heartbeat_config()
+    kiosks = db.scalars(select(Kiosk).order_by(Kiosk.id)).all()
+    statuses = {
+        s.kiosk_code: s
+        for s in db.query(KioskStatus).all()
+    }
+
+    result = []
+    for kiosk in kiosks:
+        status_row = statuses.get(kiosk.code)
+        last_seen = status_row.last_seen if status_row else None
+        state, minutes = evaluate_status(last_seen, config)
+        result.append({
+            "kiosk_code": kiosk.code,
+            "name": kiosk.name,
+            "location": kiosk.location,
+            "is_active": kiosk.is_active,
+            "last_seen": last_seen,
+            "last_heartbeat": status_row.last_heartbeat if status_row else None,
+            "last_submission": status_row.last_submission if status_row else None,
+            "app_version": status_row.app_version if status_row else None,
+            "device_name": status_row.device_name if status_row else None,
+            "status": state,
+            "minutes_since_seen": minutes,
+        })
+    return result
+
 @router.get("/kiosks", response_model=list[KioskRead])
 def list_kiosks(
     db: Session = Depends(get_db),
@@ -309,13 +437,20 @@ def update_questionnaire(
 
 
 
-@router.post("/responses", response_model=ResponseRead)
+@router.post("/responses")
 def submit_response(
     payload: ResponseCreate,
     request: Request,
     db: Session = Depends(get_db),
 ):
-    client_ip = request.client.host
+    client_ip = request.client.host if request.client else None
+
+    settings, _ = enforce_before_submission(
+        db,
+        kiosk_code=payload.kiosk_code,
+        client_ip=client_ip,
+    )
+
     response = Response(
         questionnaire_id=payload.questionnaire_id,
         kiosk_code=payload.kiosk_code,
@@ -326,7 +461,30 @@ def submit_response(
     db.add(response)
     db.commit()
     db.refresh(response)
-    return response
+
+    record_kiosk_activity(
+        db,
+        kiosk_code=payload.kiosk_code,
+        activity_type="submission",
+        client_ip=client_ip,
+    )
+
+    evaluate_after_submission(
+        db,
+        response=response,
+        settings=settings,
+        client_ip=client_ip,
+    )
+    db.commit()
+
+    return {
+        "status": "ok",
+        "cooldown_seconds": (
+            settings.cooldown_seconds
+            if settings.enabled else 0
+        ),
+        "response": ResponseRead.model_validate(response).model_dump(mode="json"),
+    }
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -587,7 +745,17 @@ def analytics_summary(
         .count()
     )
 
+    config = load_heartbeat_config()
     offline_kiosks = 0
+    status_rows = {
+        s.kiosk_code: s
+        for s in db.query(KioskStatus).all()
+    }
+    for kiosk in db.query(Kiosk).filter(Kiosk.is_active == True).all():
+        row = status_rows.get(kiosk.code)
+        state, _ = evaluate_status(row.last_seen if row else None, config)
+        if state in {"offline", "never_seen"}:
+            offline_kiosks += 1
 
     return {
         "total_responses": total_responses,
@@ -595,4 +763,58 @@ def analytics_summary(
         "avg_rating": avg_rating,
         "active_kiosks": active_kiosks,
         "offline_kiosks": offline_kiosks,
+    }
+    
+
+@router.post("/kiosks/bulk-assign-questionnaire")
+def bulk_assign_questionnaire(
+    payload: BulkAssignRequest,
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_admin),
+):
+    if not payload.kiosk_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="No kiosks selected",
+        )
+
+    questionnaire = (
+        db.query(Questionnaire)
+        .filter(Questionnaire.id == payload.questionnaire_id)
+        .first()
+    )
+
+    if not questionnaire:
+        raise HTTPException(status_code=404, detail="Questionnaire not found")
+
+    kiosks = (
+        db.query(Kiosk)
+        .filter(Kiosk.id.in_(payload.kiosk_ids))
+        .all()
+    )
+
+    found_ids = {kiosk.id for kiosk in kiosks}
+    missing_ids = sorted(set(payload.kiosk_ids) - found_ids)
+
+    if missing_ids:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "message": "One or more kiosks were not found",
+                "missing_kiosk_ids": missing_ids,
+            },
+        )
+
+    updated = 0
+
+    for kiosk in kiosks:
+        kiosk.questionnaire_id = payload.questionnaire_id
+        updated += 1
+
+    db.commit()
+
+    return {
+        "status": "ok",
+        "updated_kiosks": updated,
+        "questionnaire_id": payload.questionnaire_id
     }

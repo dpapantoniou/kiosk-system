@@ -1,4 +1,3 @@
-
 async function login() {
     const username = document.getElementById("loginUser").value;
     const password = document.getElementById("loginPass").value;
@@ -17,6 +16,7 @@ async function login() {
         await loadQuestionnaires();
 		await loadKiosks();
         await loadResponses();
+		loadAnalyticsSummary();
 }
 async function checkAuth() {
     const res = await fetch(`${API}/auth/me`, {
@@ -28,6 +28,7 @@ async function checkAuth() {
         await loadQuestionnaires();
 		await loadKiosks();
         await loadResponses();
+		loadAnalyticsSummary();
     } else {
         document.getElementById("loginBox").style.display = "block";
         document.getElementById("adminApp").style.display = "none";
@@ -119,6 +120,8 @@ async function logout() {
     location.reload();
 }	
     let draftQuestions = [];
+	let editingQuestionnaireId = null;
+    let editingQuestionIndex = null;
     let kiosksCache = [];
     let questionnairesCache = [];
     function toggleOptionsArea() {
@@ -132,22 +135,54 @@ async function logout() {
         .map(x => x.trim())
         .filter(Boolean);
     }
+	
+	function refreshBranchingQuestionOptions() {
+    const sel =
+        document.getElementById(
+            "branch_depends_on"
+        );
+    if (!sel) return;
+    const current =
+        sel.value;
+    sel.innerHTML =
+        `<option value="">
+            -- none --
+        </option>`;
+    draftQuestions.forEach(q => {
+        const label =
+            q.text_i18n?.en || q.code;
+        sel.innerHTML += `
+            <option value="${q.code}">
+                ${q.code} — ${label}
+            </option>
+        `;
+    });
+    sel.value = current;
+    }
+	
     function renderDraftQuestions() {
       const wrap = document.getElementById("questions_preview");
       if (draftQuestions.length === 0) {
         wrap.innerHTML = `<p class="muted">No questions added yet.</p>`;
         return;
       }
-      wrap.innerHTML = `<h3>Questions to be created</h3>` + draftQuestions.map((q, idx) => `
+      wrap.innerHTML = `<h3>Question List</h3>` + draftQuestions.map((q, idx) => `
         <div class="question-box">
           <strong>${q.code}</strong> — ${q.question_type} — order ${q.order_no}<br>
           <span class="muted">EN:</span> ${q.text_i18n.en || ""}<br>
           <span class="muted">EL:</span> ${q.text_i18n.el || ""}<br>
           <span class="muted">TR:</span> ${q.text_i18n.tr || ""}<br>
           ${q.options_i18n ? `<pre>${JSON.stringify(q.options_i18n, null, 2)}</pre>` : ""}
-          <button class="danger" onclick="removeQuestion(${idx})">Remove</button>
+			<button onclick="editQuestion(${idx})">
+				Edit
+			</button>
+			<button class="danger"
+					onclick="removeQuestion(${idx})">
+				Remove
+			</button>
         </div>
       `).join("");
+	   refreshBranchingQuestionOptions();
     }
 
     function resetQuestionForm() {
@@ -161,6 +196,12 @@ async function logout() {
       document.getElementById("opts_el").value = "";
       document.getElementById("opts_tr").value = "";
       document.getElementById("question_required").value = "false";
+	  document.getElementById(
+				"branch_depends_on"
+				).value = "";
+	  document.getElementById(
+				"branch_equals"
+				).value = "";
       toggleOptionsArea();
     }
 
@@ -168,6 +209,106 @@ async function logout() {
       draftQuestions.splice(idx, 1);
       renderDraftQuestions();
     }
+	function editQuestion(idx) {
+
+  const q = draftQuestions[idx];
+
+  if (!q) return;
+
+  editingQuestionIndex = idx;
+
+  document.getElementById("question_form_title").innerText =
+    "Create / Edit Question";
+
+  document.getElementById("add_question_btn").innerText =
+    "Add / Update Question";
+
+  document.getElementById("question_code").value = q.code || "";
+  document.getElementById("question_order").value = q.order_no || 1;
+  document.getElementById("question_type").value = q.question_type || "rating";
+
+  document.getElementById("text_en").value = q.text_i18n?.en || "";
+  document.getElementById("text_el").value = q.text_i18n?.el || "";
+  document.getElementById("text_tr").value = q.text_i18n?.tr || "";
+
+  document.getElementById("question_required").value =
+    q.is_required ? "true" : "false";
+
+  toggleOptionsArea();
+	if (q.branching_rule) {
+		document.getElementById(
+		"branch_depends_on"
+		).value =
+		q.branching_rule.depends_on || "";
+
+		document.getElementById(
+		"branch_equals"
+		).value =
+		(q.branching_rule.equals_any || [])
+			.join(",");
+	}
+	else {
+		document.getElementById(
+		"branch_depends_on"
+		).value = "";
+		document.getElementById(
+			"branch_equals"
+		).value = "";
+	}
+
+  if (q.options_i18n) {
+    document.getElementById("opts_en").value =
+      (q.options_i18n.en || []).join("\n");
+
+    document.getElementById("opts_el").value =
+      (q.options_i18n.el || []).join("\n");
+
+    document.getElementById("opts_tr").value =
+      (q.options_i18n.tr || []).join("\n");
+  } else {
+    document.getElementById("opts_en").value = "";
+    document.getElementById("opts_el").value = "";
+    document.getElementById("opts_tr").value = "";
+  }
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
+}
+	
+	
+	
+	function editQuestionnaire(id) {
+     const q =
+        questionnairesCache.find(
+        x => x.id === id
+        );
+     if (!q) return;
+     editingQuestionnaireId = id;
+	 editingQuestionIndex = null;
+     document.getElementById("q_code").value =
+       q.code;
+     document.getElementById("q_name").value =
+       q.name;
+     document.getElementById("q_active").value =
+       q.is_active ? "true" : "false";
+     draftQuestions =
+       JSON.parse(
+       JSON.stringify(q.questions || [])
+       );
+     renderDraftQuestions();
+     const btn =
+       document.getElementById("create_questionnaire_btn");
+     if (btn) {
+       btn.innerText =
+         "Save Questionnaire";
+     }
+     window.scrollTo({
+       top: 0,
+       behavior: "smooth"
+     });
+}
 
     function addQuestion() {
       const code = document.getElementById("question_code").value.trim();
@@ -177,6 +318,15 @@ async function logout() {
       const textEl = document.getElementById("text_el").value.trim();
       const textTr = document.getElementById("text_tr").value.trim();
       const required = document.getElementById("question_required").value === "true";
+	  const dependsOn =
+			document.getElementById("branch_depends_on")
+			.value.trim();
+	  const equalsValues =
+		    document.getElementById("branch_equals")
+           .value
+           .split(",")
+           .map(x => x.trim())
+           .filter(Boolean);
 
       if (!code || !orderNo || !textEn) {
         alert("Please provide at least question code, order number, and English text.");
@@ -196,23 +346,58 @@ async function logout() {
 
         optionsI18n = { en, el, tr };
       }
+	const questionObj = {
 
-      draftQuestions.push({
-        code,
-        order_no: orderNo,
-        question_type: type,
-        text_i18n: {
-          en: textEn,
-          el: textEl,
-          tr: textTr
-        },
-        options_i18n: optionsI18n,
-        is_required: required,
-        branching_rule: null
-      });
+		code,
 
-      renderDraftQuestions();
-      resetQuestionForm();
+		order_no: orderNo,
+
+		question_type: type,
+
+		text_i18n: {
+			en: textEn,
+			el: textEl,
+			tr: textTr
+		},
+
+		options_i18n: optionsI18n,
+			is_required: required,
+			branching_rule:
+			  dependsOn
+				? {
+					depends_on: dependsOn,
+					equals_any: equalsValues
+				}
+				: null
+	};
+
+	if (editingQuestionIndex !== null) {
+
+		draftQuestions[editingQuestionIndex] =
+		questionObj;
+
+		editingQuestionIndex = null;
+
+		document.getElementById(
+			"question_form_title"
+		).innerText =
+		"Add Question";
+
+		document.getElementById(
+		"add_question_btn"
+		).innerText =
+		"Add Question";
+	}
+
+else {
+	draftQuestions.push(questionObj);
+	}
+	renderDraftQuestions();
+	resetQuestionForm();
+	window.scrollTo({
+       top: 0,
+       behavior: "smooth"
+    });
     }
 
     async function createQuestionnaire() {
@@ -239,32 +424,66 @@ async function logout() {
 
       const resultBox = document.getElementById("create_result");
       resultBox.innerText = "Creating...";
+	  
+	  try {
 
-      try {
-        const res = await fetch(`${API}/questionnaires`, {
-          method: "POST",
-		  credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
+      const isEdit =
+         editingQuestionnaireId !== null;
 
-        const data = await res.json();
+      const url = isEdit
+        ? `${API}/questionnaires/${editingQuestionnaireId}`
+        : `${API}/questionnaires`;
 
-        if (!res.ok) {
-          resultBox.innerText = `Error: ${JSON.stringify(data)}`;
-          return;
-        }
+      const method =
+        isEdit ? "PUT" : "POST";
 
-        resultBox.innerText = `Created questionnaire ${data.code} (id=${data.id})`;
+      const res = await fetch(url, {
+
+        method,
+
+        credentials: "include",
+
+        headers: {
+          "Content-Type": "application/json"
+      },
+
+      body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        resultBox.innerText = `Error: ${JSON.stringify(data)}`;
+      return;
+      }
+
+      resultBox.innerText =
+       isEdit
+         ? `Updated questionnaire ${data.code}`
+         : `Created questionnaire ${data.code} (id=${data.id})`;
+
         draftQuestions = [];
         renderDraftQuestions();
+
         document.getElementById("q_code").value = "";
         document.getElementById("q_name").value = "";
-        await loadQuestionnaires();
-      } catch (e) {
-        resultBox.innerText = `Error: ${e.message}`;
-      }
-    }
+
+        editingQuestionnaireId = null;
+
+        const btn =
+        document.getElementById("create_questionnaire_btn");
+
+       if (btn) {
+          btn.innerText = "Create Questionnaire";
+       }
+
+       await loadQuestionnaires();
+
+     } catch (e) {
+
+       resultBox.innerText = `Error: ${e.message}`;
+     }	
+	}
 
     async function loadKiosks() {
       const wrap = document.getElementById("kiosks_list");
@@ -337,7 +556,7 @@ async function logout() {
           <table>
             <thead>
               <tr>
-                <th>ID</th><th>Code</th><th>Name</th><th>Questions</th>
+                <th>ID</th><th>Code</th><th>Name</th><th>Questions</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -347,6 +566,11 @@ async function logout() {
                   <td>${q.code}</td>
                   <td>${q.name}</td>
                   <td>${q.questions ? q.questions.length : 0}</td>
+				  <td>
+                     <button onclick="editQuestionnaire(${q.id})">
+                       Edit
+                     </button>
+                  </td>
                 </tr>
               `).join("")}
             </tbody>
@@ -578,20 +802,100 @@ async function logout() {
     function downloadCsv() {
          window.open(`${API}/responses/export.csv`, "_blank");
     }
+	function exportResponsesXlsx() {
+		 window.open(
+        API + "/responses/export.xlsx",
+        "_blank"
+        );
+    }
     toggleOptionsArea();
     renderDraftQuestions();
     checkAuth();
 	
-	function showTab(tabId, buttonEl) {
+async function loadAnalyticsSummary() {
 
-  document.querySelectorAll('.tab-content')
-    .forEach(el => el.style.display = 'none');
+    const wrap =
+        document.getElementById(
+            "analytics_summary"
+        );
 
-  document.querySelectorAll('.tab-button')
-    .forEach(el => el.classList.remove('active'));
+    if (!wrap) return;
 
-  document.getElementById(tabId).style.display = 'block';
+    wrap.innerText =
+        "Loading analytics...";
 
-  buttonEl.classList.add('active');
+    try {
+
+        const res = await fetch(
+            `${API}/analytics/summary`,
+            {
+                credentials: "include"
+            }
+        );
+
+        if (res.status === 401) {
+
+            location.reload();
+            return;
+        }
+
+        const data = await res.json();
+
+        wrap.innerHTML = `
+
+            <div class="analytics-grid">
+
+                <div class="analytics-card">
+                    <h3>Total Responses</h3>
+                    <p>${data.total_responses}</p>
+                </div>
+
+                <div class="analytics-card">
+                    <h3>Responses Today</h3>
+                    <p>${data.responses_today}</p>
+                </div>
+
+                <div class="analytics-card">
+                    <h3>Average Rating</h3>
+                    <p>${data.avg_rating ?? "-"}</p>
+                </div>
+
+                <div class="analytics-card">
+                    <h3>Active Kiosks</h3>
+                    <p>${data.active_kiosks}</p>
+                </div>
+
+            </div>
+
+        `;
+
+    } catch (e) {
+
+        wrap.innerText =
+            `Error: ${e.message}`;
+    }
+}	
+	
+	
+function showTab(tabId, buttonEl) {
+
+    document.querySelectorAll('.tab-content')
+        .forEach(el => el.style.display = 'none');
+
+    document.querySelectorAll('.tab-button')
+        .forEach(el => el.classList.remove('active'));
+
+    document.getElementById(tabId).style.display =
+        'block';
+
+    buttonEl.classList.add('active');
+
+    if (tabId === "analytics_tab") {
+
+        loadAnalyticsSummary();
+    }
 }
+
+	
+
   

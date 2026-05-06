@@ -1,6 +1,6 @@
 async function login() {
-    const username = document.getElementById("loginUser").value;
     const password = document.getElementById("loginPass").value;
+	const username = document.getElementById("loginUser").value;
     const res = await fetch(`${API}/auth/login`, {
         method: "POST",
 		credentials: "include",
@@ -47,8 +47,7 @@ async function createKiosk() {
   const location =
     document.getElementById("kiosk_location")
       .value.trim();
-
-  const isActive =
+	const isActive =
     document.getElementById("kiosk_active")
       .value === "true";
 
@@ -81,6 +80,7 @@ async function createKiosk() {
         code,
         name,
         location,
+		logo_data: currentLogoData,
         is_active: isActive
       })
     });
@@ -123,7 +123,10 @@ async function logout() {
 	let editingQuestionnaireId = null;
     let editingQuestionIndex = null;
     let kiosksCache = [];
+	let kioskStatusesCache = [];
     let questionnairesCache = [];
+	let currentLogoData = "";
+    let currentEditLogoData = "";
     function toggleOptionsArea() {
       const type = document.getElementById("question_type").value;
       document.getElementById("options_area").style.display =
@@ -485,6 +488,32 @@ else {
      }	
 	}
 
+function formatLastSeen(value) {
+
+  if (!value) return "";
+
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
+  }
+}
+
+function formatKioskStatus(status) {
+
+  if (!status) return "never_seen";
+
+  const minutes = status.minutes_since_seen;
+
+  const suffix =
+    minutes === null || minutes === undefined
+      ? ""
+      : ` (${minutes} min)`;
+
+  return `${status.status}${suffix}`;
+}
+
+
     async function loadKiosks() {
       const wrap = document.getElementById("kiosks_list");
       wrap.innerText = "Loading...";
@@ -498,6 +527,31 @@ else {
         }
         const data = await res.json();
         kiosksCache = data;
+		try {
+
+		const statusRes = await fetch(
+			`${API}/kiosks/status`,
+			{
+			credentials: "include"
+			}
+		);
+
+		kioskStatusesCache =
+			statusRes.ok
+			? await statusRes.json()
+			: [];
+
+		} catch {
+
+			kioskStatusesCache = [];
+		}
+
+		const statusMap = {};
+
+		kioskStatusesCache.forEach(s => {
+		statusMap[s.kiosk_code] = s;
+		});	
+		
         const qMap = {};
         questionnairesCache.forEach(q => {
            qMap[q.id] = q;
@@ -509,6 +563,8 @@ else {
                 <th>Code</th>
                 <th>Name</th>
                 <th>Location</th>
+				<th>Status</th>
+				<th>Last Seen</th>
                 <th>Questionnaire</th>
                 <th>Actions</th>				
               </tr>
@@ -519,6 +575,8 @@ else {
                   <td>${k.code}</td>
                   <td>${k.name}</td>
                   <td>${k.location || ""}</td>
+				  <td>${formatKioskStatus(statusMap[k.code])}</td>
+				  <td>${formatLastSeen(statusMap[k.code]?.last_seen)}</td>
                   <td>${qMap[k.questionnaire_id]?.code || ""}</td>
 				  <td>
                      <button onclick="editKiosk(${k.id})">
@@ -638,6 +696,7 @@ else {
       const location =
         document.getElementById("edit_kiosk_location")
          .value.trim();
+		 
 
       const isActive =
         document.getElementById("edit_kiosk_active")
@@ -668,6 +727,7 @@ else {
                code,
                name,
                location,
+			   logo_data: currentEditLogoData,
                is_active: isActive,
                questionnaire_id: questionnaireId
              })
@@ -714,52 +774,74 @@ else {
       ).join("");
     }
 
-    async function assignQuestionnaire() {
-      const kioskId = parseInt(document.getElementById("assign_kiosk").value, 10);
-      const questionnaireId = parseInt(document.getElementById("assign_questionnaire").value, 10);
-      const kiosk = kiosksCache.find(k => k.id === kioskId);
-	  const selectedQuestionnaire =
-         questionnairesCache.find(
-           q => q.id === questionnaireId
-         );
-      const resultBox = document.getElementById("assign_result");
+async function assignQuestionnaire() {
 
-      if (!kiosk || !questionnaireId) {
-        resultBox.innerText = "Please select both kiosk and questionnaire.";
-        return;
+  const kioskIds = Array.from(
+    document.getElementById("assign_kiosk").selectedOptions
+  ).map(o => parseInt(o.value, 10));
+
+  const questionnaireId = parseInt(
+    document.getElementById("assign_questionnaire").value,
+    10
+  );
+
+  const selectedQuestionnaire =
+    questionnairesCache.find(
+      q => q.id === questionnaireId
+    );
+
+  const resultBox =
+    document.getElementById("assign_result");
+
+  if (!kioskIds.length || !questionnaireId) {
+
+    resultBox.innerText =
+      "Please select kiosk(s) and questionnaire.";
+
+    return;
+  }
+
+  resultBox.innerText = "Assigning...";
+
+  try {
+
+    const res = await fetch(
+      `${API}/kiosks/bulk-assign-questionnaire`,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          questionnaire_id: questionnaireId,
+          kiosk_ids: kioskIds
+        })
       }
+    );
 
-      const payload = {
-        code: kiosk.code,
-        name: kiosk.name,
-        location: kiosk.location,
-        is_active: kiosk.is_active,
-        questionnaire_id: questionnaireId
-      };
+    const data = await res.json();
 
-      resultBox.innerText = "Assigning...";
+    if (!res.ok) {
 
-      try {
-        const res = await fetch(`${API}/kiosks/${kioskId}`, {
-          method: "PUT",
-          credentials: "include",
-		  headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
+      resultBox.innerText =
+        `Error: ${JSON.stringify(data)}`;
 
-        const data = await res.json();
-
-        if (!res.ok) {
-          resultBox.innerText = `Error: ${JSON.stringify(data)}`;
-          return;
-        }
-
-        resultBox.innerText = `Assigned ${selectedQuestionnaire.code} to kiosk ${kiosk.code}`;
-        await loadKiosks();
-      } catch (e) {
-        resultBox.innerText = `Error: ${e.message}`;
-      }
+      return;
     }
+
+    resultBox.innerText =
+      `Assigned ${selectedQuestionnaire.code} to ${data.updated_kiosks} kiosk(s)`;
+
+    await loadKiosks();
+
+  } catch (e) {
+
+    resultBox.innerText =
+      `Error: ${e.message}`;
+  }
+}
+
 
     async function loadResponses() {
       const wrap = document.getElementById("responses_list");
@@ -896,6 +978,189 @@ function showTab(tabId, buttonEl) {
     }
 }
 
-	
 
+
+	function showTab(tabId, buttonEl) {
+
+  document.querySelectorAll('.tab-content')
+    .forEach(el => el.style.display = 'none');
+
+  document.querySelectorAll('.tab-button')
+    .forEach(el => el.classList.remove('active'));
+
+  document.getElementById(tabId).style.display = 'block';
+
+  buttonEl.classList.add('active');
+}
   
+async function loadAntiAbuseSettings() {
+  const result = document.getElementById("antiabuse_settings_result");
+  result.innerText = "Loading...";
+
+  try {
+    const res = await fetch(`${API}/anti-abuse/settings`, {
+      credentials: "include"
+    });
+
+    if (res.status === 401) {
+      location.reload();
+      return;
+    }
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      result.innerText = `Error: ${JSON.stringify(data)}`;
+      return;
+    }
+
+    document.getElementById("aa_enabled").value = String(data.enabled);
+    document.getElementById("aa_cooldown_seconds").value = data.cooldown_seconds;
+    document.getElementById("aa_repeat_threshold").value = data.repeat_threshold;
+    document.getElementById("aa_repeat_window_seconds").value = data.repeat_window_seconds;
+    document.getElementById("aa_identical_pattern_threshold").value = data.identical_pattern_threshold;
+    document.getElementById("aa_hard_block_on_cooldown").value = String(data.hard_block_on_cooldown);
+
+    result.innerText = "Settings loaded.";
+  } catch (e) {
+    result.innerText = `Error: ${e.message}`;
+  }
+}
+
+async function saveAntiAbuseSettings() {
+  const result = document.getElementById("antiabuse_settings_result");
+  result.innerText = "Saving...";
+
+  const payload = {
+    enabled: document.getElementById("aa_enabled").value === "true",
+    cooldown_seconds: parseInt(document.getElementById("aa_cooldown_seconds").value || "0"),
+    repeat_threshold: parseInt(document.getElementById("aa_repeat_threshold").value || "1"),
+    repeat_window_seconds: parseInt(document.getElementById("aa_repeat_window_seconds").value || "1"),
+    identical_pattern_threshold: parseInt(document.getElementById("aa_identical_pattern_threshold").value || "1"),
+    hard_block_on_cooldown: document.getElementById("aa_hard_block_on_cooldown").value === "true"
+  };
+
+  try {
+    const res = await fetch(`${API}/anti-abuse/settings`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      result.innerText = `Error: ${JSON.stringify(data)}`;
+      return;
+    }
+
+    result.innerText = "Settings saved.";
+  } catch (e) {
+    result.innerText = `Error: ${e.message}`;
+  }
+}
+
+async function loadAntiAbuseEvents() {
+  const wrap = document.getElementById("antiabuse_events_list");
+  wrap.innerText = "Loading...";
+
+  try {
+    const res = await fetch(`${API}/anti-abuse/events?limit=100`, {
+      credentials: "include"
+    });
+
+    if (res.status === 401) {
+      location.reload();
+      return;
+    }
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      wrap.innerText = `Error: ${JSON.stringify(data)}`;
+      return;
+    }
+
+    if (!data.length) {
+      wrap.innerText = "No anti-abuse events recorded yet.";
+      return;
+    }
+
+    wrap.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Kiosk</th>
+            <th>Event</th>
+            <th>Severity</th>
+            <th>Metadata</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.map(e => `
+            <tr>
+              <td>${e.created_at || ""}</td>
+              <td>${e.kiosk_code || ""}</td>
+              <td>${e.event_type}</td>
+              <td>${e.severity}</td>
+              <td><pre>${JSON.stringify(e.metadata_json || {}, null, 2)}</pre></td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    wrap.innerText = `Error: ${e.message}`;
+  }
+}
+function loadLogoFile(input) {
+
+    const file = input.files[0];
+
+    if (!file) return;
+
+    if (file.size > 300000) {
+
+        alert("Logo too large");
+
+        return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+
+        currentLogoData = e.target.result;
+
+        alert("Logo loaded");
+    };
+
+    reader.readAsDataURL(file);
+}
+
+function loadEditLogoFile(input) {
+
+    const file = input.files[0];
+
+    if (!file) return;
+
+    if (file.size > 300000) {
+
+        alert("Logo too large");
+
+        return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+
+        currentEditLogoData = e.target.result;
+
+        alert("Logo loaded");
+    };
+
+    reader.readAsDataURL(file);
+}

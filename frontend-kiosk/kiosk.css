@@ -479,3 +479,24 @@ body.high-contrast button {
         font-size: 22px;
     }
 }
+#logo-area {
+
+    height: 15vh;
+    width: 100%;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    background: white;
+
+    overflow: hidden;
+}
+
+#kiosk-logo {
+
+    max-height: 80%;
+    max-width: 70%;
+
+    object-fit: contain;
+}

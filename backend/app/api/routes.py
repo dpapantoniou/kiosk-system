@@ -3,6 +3,7 @@ import io
 import secrets
 from datetime import datetime
 from typing import List
+import base64
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response as FastAPIResponse, status
 from fastapi.responses import StreamingResponse
@@ -47,7 +48,6 @@ from app.services.kiosk_monitoring import (
     record_kiosk_activity,
 )
 
-
 class BulkAssignRequest(BaseModel):
     questionnaire_id: int
     kiosk_ids: list[int]
@@ -57,6 +57,7 @@ class KioskUpdate(BaseModel):
     location: str | None = None
     is_active: bool | None = None
     questionnaire_id: int | None = None
+    logo_data: str | None = None
 
 class QuestionnaireUpdate(BaseModel):
     code: str
@@ -179,20 +180,63 @@ def me(user: AdminUser = Depends(require_manager_or_admin)):
         "role": user.role,
     }
 
-@router.put("/kiosks/{kiosk_id}", response_model=KioskRead)
-def update_kiosk(kiosk_id: int, payload: KioskUpdate, db: Session = Depends(get_db), user: AdminUser = Depends(require_admin)):
-    kiosk = db.get(Kiosk, kiosk_id)
-    if not kiosk:
-        raise HTTPException(status_code=404, detail="Kiosk not found")
+@router.put(
+    "/kiosks/{kiosk_id}",
+    response_model=KioskRead
+)
+def update_kiosk(
+    kiosk_id: int,
+    payload: KioskUpdate,
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_admin)
+):
 
-    data = payload.model_dump(exclude_unset=True)
+    kiosk = db.get(Kiosk, kiosk_id)
+
+    if not kiosk:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Kiosk not found"
+        )
+
+    data = payload.model_dump(
+        exclude_unset=True
+    )
+
+    if (
+        "logo_data" in data
+        and data["logo_data"]
+    ):
+
+        header, b64data = (
+            data["logo_data"]
+            .split(",", 1)
+        )
+
+        kiosk.logo_blob = (
+            base64.b64decode(b64data)
+        )
+
+        kiosk.logo_mime = (
+            header.split(";")[0]
+            .replace("data:", "")
+        )
+
+        del data["logo_data"]
+
     for key, value in data.items():
+
         setattr(kiosk, key, value)
 
     db.add(kiosk)
+
     db.commit()
+
     db.refresh(kiosk)
+
     return kiosk
+
 
 @router.get("/responses", response_model=List[ResponseRead])
 def list_responses(db: Session = Depends(get_db), user: AdminUser = Depends(require_manager_or_admin)):
@@ -313,18 +357,68 @@ def list_kiosks(
 ):
     return db.scalars(select(Kiosk).order_by(Kiosk.id)).all()
 
-@router.post("/kiosks", response_model=KioskRead, status_code=status.HTTP_201_CREATED)
-def create_kiosk(payload: KioskCreate, db: Session = Depends(get_db), user: AdminUser = Depends(require_admin)):
-    existing = db.scalar(select(Kiosk).where(Kiosk.code == payload.code))
+@router.post(
+    "/kiosks",
+    response_model=KioskRead,
+    status_code=status.HTTP_201_CREATED
+)
+def create_kiosk(
+    payload: KioskCreate,
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_admin)
+):
+
+    existing = db.scalar(
+        select(Kiosk).where(
+            Kiosk.code == payload.code
+        )
+    )
+
     if existing:
-        raise HTTPException(status_code=400, detail="Kiosk code already exists")
 
-    kiosk = Kiosk(**payload.model_dump())
+        raise HTTPException(
+            status_code=400,
+            detail="Kiosk code already exists"
+        )
+
+    logo_blob = None
+    logo_mime = None
+
+    if payload.logo_data:
+
+        header, b64data = (
+            payload.logo_data.split(",", 1)
+        )
+
+        logo_blob = (
+            base64.b64decode(b64data)
+        )
+
+        logo_mime = (
+            header.split(";")[0]
+            .replace("data:", "")
+        )
+
+    data = payload.model_dump(
+        exclude={
+            "logo_data",
+            "logo_mime"
+        }
+    )
+
+    kiosk = Kiosk(
+        **data,
+        logo_blob=logo_blob,
+        logo_mime=logo_mime
+    )
+
     db.add(kiosk)
-    db.commit()
-    db.refresh(kiosk)
-    return kiosk
 
+    db.commit()
+
+    db.refresh(kiosk)
+
+    return kiosk
 
 @router.get("/questionnaires", response_model=list[QuestionnaireRead])
 def list_questionnaires(db: Session = Depends(get_db), user: AdminUser = Depends(require_manager_or_admin)):
@@ -563,8 +657,12 @@ def get_kiosk_by_code(
         "name": kiosk.name,
         "location": kiosk.location,
         "is_active": kiosk.is_active,
-
-        "questionnaire": (
+        "logo_data": (
+           f"data:{kiosk.logo_mime};base64,"
+              + base64.b64encode(kiosk.logo_blob).decode()
+)
+        if kiosk.logo_blob else None,
+            "questionnaire": (
             {
                 "id": questionnaire.id,
                 "code": questionnaire.code,
@@ -818,3 +916,4 @@ def bulk_assign_questionnaire(
         "updated_kiosks": updated,
         "questionnaire_id": payload.questionnaire_id
     }
+   

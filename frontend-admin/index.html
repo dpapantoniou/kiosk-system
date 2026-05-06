@@ -95,6 +95,11 @@
     onclick="showTab('analytics_tab', this)">
     Analytics
    </button>
+   <button class="tab-button"
+        onclick="showTab('antiabuse', this)">
+    Monitoring
+   </button> 
+      
    </div>
    
    
@@ -232,20 +237,24 @@
     <label>Location</label>
     <input id="kiosk_location"
          placeholder="e.g. Nicosia District Court">
+	   
+	<label>Logo Upload</label>
+	<input type="file"
+       id="logo_upload"
+	   onchange="loadLogoFile(this)">
+	
 
     <label>Active</label>
     <select id="kiosk_active">
       <option value="true" selected>true</option>
       <option value="false">false</option>
     </select>
-
-    <button onclick="createKiosk()">
+ 
+	<button onclick="createKiosk()">
        Create Kiosk
     </button>
-
-  <div id="kiosk_create_result"
+	<div id="kiosk_create_result"
        class="muted"></div>
-
 </div>
 
 <div class="card" id="edit_kiosk_card" style="display:none;">
@@ -262,6 +271,11 @@
 
   <label>Location</label>
   <input id="edit_kiosk_location">
+
+  <label>Logo Upload</label>   
+  <input type="file"
+       id="edit_logo_upload"
+       onchange="loadEditLogoFile(this)">
 
   <label>Active</label>
   <select id="edit_kiosk_active">
@@ -298,17 +312,31 @@
 
     <div class="card">
       <h2>Assign Questionnaire to Kiosk</h2>
+<label>Select Kiosk(s)</label>
 
-      <label>Select Kiosk</label>
-      <select id="assign_kiosk"></select>
+<select
+    id="assign_kiosk"
+    multiple
+    size="8"
+    style="width:100%; min-height:180px;">
+</select>
 
-      <label>Select Questionnaire</label>
-      <select id="assign_questionnaire"></select>
+<div class="muted"
+     style="margin-top:6px; margin-bottom:12px;">
 
-      <button onclick="assignQuestionnaire()">Assign</button>
-      <div id="assign_result" class="muted"></div>
-	  
-	  
+  Hold Ctrl (or Cmd on Mac) to select multiple kiosks
+
+</div>
+
+<label>Select Questionnaire</label>
+<select id="assign_questionnaire"></select>
+
+<button onclick="assignQuestionnaire()">
+  Assign to Selected Kiosks
+</button>
+
+<div id="assign_result" class="muted"></div>
+     
     </div>
     </div>
 	
@@ -342,6 +370,60 @@
         Loading analytics...
     </div>
 </div>
+<div id="antiabuse" class="tab-content" style="display:none;">
+  <div class="card">
+    <h2>Anti-Abuse Settings</h2>
+
+    <label>Enabled</label>
+    <select id="aa_enabled">
+      <option value="true">true</option>
+      <option value="false">false</option>
+    </select>
+
+    <label>Cooldown seconds</label>
+    <input id="aa_cooldown_seconds" type="number">
+
+    <label>Rapid-repeat threshold</label>
+    <input id="aa_repeat_threshold" type="number">
+
+    <label>Rapid-repeat window seconds</label>
+    <input id="aa_repeat_window_seconds" type="number">
+
+    <label>Identical-pattern threshold</label>
+    <input id="aa_identical_pattern_threshold" type="number">
+
+    <label>Hard block during cooldown</label>
+    <select id="aa_hard_block_on_cooldown">
+      <option value="true">true</option>
+      <option value="false">false</option>
+    </select>
+
+    <button onclick="loadAntiAbuseSettings()">
+      Load Settings
+    </button>
+
+    <button onclick="saveAntiAbuseSettings()">
+      Save Settings
+    </button>
+
+    <div id="antiabuse_settings_result"
+         class="muted"></div>
+  </div>
+
+  <div class="card">
+    <h2>Anti-Abuse Events</h2>
+
+    <button onclick="loadAntiAbuseEvents()">
+      Refresh Events
+    </button>
+
+    <div id="antiabuse_events_list"
+         class="muted"></div>
+  </div>
+</div>
+
+
+
 
   </div>
 </div>

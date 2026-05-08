@@ -294,6 +294,14 @@ const DEMO_QUESTIONNAIRE = {
 
 const isDemo = params.get("demo") === "1";
 
+// Placeholder wordmark for demo screenshots. Real kiosks receive
+// data.logo_data from /by-code/{code}.
+const DEMO_LOGO = "data:image/svg+xml;utf8," + encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="44" viewBox="0 0 220 44">
+     <text x="0" y="32" font-family="Georgia, serif" font-style="italic" font-size="30" letter-spacing="0.02em" fill="#1a1d2e">Acme &amp; Co<tspan fill="#a93a1f">.</tspan></text>
+   </svg>`
+);
+
 async function start() {
 
     // Demo mode — skip the network entirely
@@ -301,6 +309,7 @@ async function start() {
         state.questionnaire = DEMO_QUESTIONNAIRE;
         state.answers = {};
         state.currentQuestionIndex = 0;
+        document.getElementById("kiosk-logo").src = DEMO_LOGO;
         document.getElementById("logo-area").style.visibility = "visible";
         state.screen = "survey";
         render();
@@ -819,6 +828,9 @@ function renderThankYou() {
     `;
 }
 
+if (isDemo) {
+    document.getElementById("kiosk-logo").src = DEMO_LOGO;
+}
 setOfflineBadge();
 render();
 

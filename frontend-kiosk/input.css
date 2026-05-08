@@ -1,0 +1,914 @@
+/*! GENERATED FROM input.css — DO NOT EDIT kiosk.css DIRECTLY. Run `npm run dev:css` or `npm run build:css`. */
+
+/* ============================================================
+   CX-FP Kiosk — Tailwind 4 source
+   Aesthetic: "Editorial Quiet" — warm paper-and-ink, single
+   typeface across voices, terracotta accent.
+
+   This file is the source. kiosk.css is generated from it.
+   ============================================================ */
+
+@import "tailwindcss";
+
+/* ------------------------------------------------------------
+   Design tokens — shadcn-aligned names, kiosk-specific values.
+   Token names mirror hellaspay's eventual @kit/ui set so a
+   later monorepo unification is a copy-paste of values, not
+   a rename pass.
+   ------------------------------------------------------------ */
+@theme {
+  /* Color — warm paper-and-ink with Aegean terracotta accent */
+  --color-background:        oklch(0.985 0.005 85);
+  --color-foreground:        oklch(0.180 0.012 250);
+
+  --color-muted:             oklch(0.940 0.008 85);
+  --color-muted-foreground:  oklch(0.450 0.010 250);
+
+  --color-card:              oklch(0.985 0.005 85);
+  --color-card-foreground:   oklch(0.180 0.012 250);
+
+  --color-border:            oklch(0.870 0.010 85);
+  --color-input:             oklch(0.870 0.010 85);
+
+  --color-primary:           oklch(0.550 0.180 25);
+  --color-primary-foreground: oklch(0.985 0.005 85);
+
+  --color-accent:            oklch(0.940 0.008 85);
+  --color-accent-foreground: oklch(0.180 0.012 250);
+
+  --color-success:           oklch(0.550 0.100 130);
+  --color-destructive:       oklch(0.550 0.180 25);
+  --color-ring:              oklch(0.750 0.120 75);
+
+  /* Type — Source Serif 4 carries display + body via opsz+wght axes
+     (full Greek + Latin Ext-A); JetBrains Mono carries meta UI. */
+  --font-sans:    "Source Serif 4", ui-serif, Georgia, serif;
+  --font-serif:   "Source Serif 4", ui-serif, Georgia, serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Type scale — kiosk-specific names for the bespoke sizes */
+  --text-kiosk-display:   8.5rem;   /* 136px — attract phrase, thank-you */
+  --text-kiosk-language:  6rem;     /* 96px — language picker native script */
+  --text-kiosk-question:  3.5rem;   /* 56px — survey question */
+  --text-kiosk-rating:    5rem;     /* 80px — rating numbers */
+  --text-kiosk-option:    1.5rem;   /* 24px — choice option text */
+  --text-kiosk-meta:      0.75rem;  /* 12px — mono meta UI */
+
+  /* Radii — restrained */
+  --radius:    0.25rem;
+  --radius-sm: 0.125rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+
+  /* Motion — single easing; no bounce, no spring */
+  --ease-quiet: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Reserved space for the OS onscreen keyboard. Set to 0 by
+     default; .kbd-open on <body> raises it. Tune per kiosk. */
+  --kbd-h: 0px;
+
+  /* Shadow — subtle paper depth, never glassy */
+  --shadow-quiet:   0 1px 2px 0 oklch(0.18 0.012 250 / 0.04);
+  --shadow-lifted:  0 4px 24px -8px oklch(0.18 0.012 250 / 0.10);
+}
+
+/* ------------------------------------------------------------
+   Self-hosted fonts.
+
+   Literata variable: opsz 7–72, wght 200–900, plus italic axis.
+   JetBrains Mono variable: wght 100–800.
+
+   All subsetted to Latin + Latin Ext-A + Greek + punctuation
+   + currency + letterlike. ~540KB combined, cached after
+   first kiosk boot.
+
+   font-display: block — kiosk; we wait for the font rather
+   than flash a fallback. (FOIT, not FOUT.)
+   ------------------------------------------------------------ */
+@font-face {
+  font-family: "Source Serif 4";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: block;
+  src: url("./fonts/SourceSerif4-Variable.woff2") format("woff2-variations");
+}
+@font-face {
+  font-family: "Source Serif 4";
+  font-style: italic;
+  font-weight: 200 900;
+  font-display: block;
+  src: url("./fonts/SourceSerif4-Italic-Variable.woff2") format("woff2-variations");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: block;
+  src: url("./fonts/JetBrainsMono-Variable.woff2") format("woff2-variations");
+}
+
+/* ------------------------------------------------------------
+   Base — replace Arial. The kiosk body always uses Fraunces.
+   ------------------------------------------------------------ */
+@layer base {
+  html, body {
+    font-family: var(--font-sans);
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-kerning: normal;
+  }
+
+  /* Kiosk hygiene — disable browser behaviors that don't belong on a
+     locked touch device: text selection, long-press callouts, pull-
+     to-refresh / overscroll, system cursor, tap delay, tap highlight. */
+  html, body {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  body {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    cursor: none;
+  }
+  /* Textarea is the one place we want native text input affordances. */
+  textarea {
+    -webkit-user-select: text;
+    user-select: text;
+    cursor: text;
+  }
+
+  /* Focus rings — gold ring using --color-ring on every interactive
+     element. Visible only on keyboard focus, never on touch/mouse. */
+  *:focus { outline: none; }
+  button:focus-visible,
+  textarea:focus-visible,
+  [role="button"]:focus-visible,
+  .langpick__card:focus-visible,
+  .attract:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 4px;
+    border-radius: 2px;
+  }
+
+  /* Tabular figures everywhere numbers are used as UI */
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  /* Mono small-caps treatment for meta labels */
+  .mono-meta {
+    font-family: var(--font-mono);
+    font-size: var(--text-kiosk-meta);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+}
+
+/* ------------------------------------------------------------
+   Components — shared composites used across screens.
+   Kept thin; per-screen styling lives inline as utilities.
+   ------------------------------------------------------------ */
+@layer components {
+  /* ----------- shared chrome ----------- */
+
+  .kiosk-shell {
+    position: relative;
+    min-height: 100vh;
+    background-color: var(--color-background);
+  }
+
+  /* Header floats over the canvas so the empty space it would
+     otherwise reserve doesn't push screens off-center. */
+  .kiosk-header {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 28px clamp(24px, 3vw, 56px) 0;
+    pointer-events: none; /* allow clicks through to attract */
+  }
+  .kiosk-header > * { pointer-events: auto; }
+  .kiosk-header__logo img {
+    max-height: 44px;
+    width: auto;
+    object-fit: contain;
+    opacity: 0.9;
+  }
+
+  /* Bottom ticker — instrument-panel feel, mono. Floats over the
+     canvas like the header. Toggled visible on attract only. */
+  .kiosk-ticker {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    z-index: 10;
+    padding: 18px clamp(24px, 3vw, 56px);
+    display: flex;
+    justify-content: space-between;
+    color: var(--color-muted-foreground);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
+  .kiosk-ticker__dot {
+    color: var(--color-primary);
+    margin-right: 0.5em;
+  }
+
+  /* Main content area — fills the whole viewport since header
+     and ticker float over it. Each screen renders inside. */
+  .kiosk-main {
+    position: relative;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ----------- attract screen ----------- */
+
+  .attract {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-rows: 1fr auto;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  /* Massive phrase, anchored bottom-left with 120px margin and
+     enough breathing room above the CTA. */
+  .attract__hero {
+    position: relative;
+  }
+  .attract__phrase {
+    position: absolute;
+    left: clamp(40px, 6vw, 120px);
+    right: clamp(40px, 6vw, 120px);
+    bottom: 0;
+    font-family: var(--font-sans);
+    font-style: normal;
+    font-variation-settings: "opsz" 60, "wght" 400;
+    font-size: clamp(72px, 9vw, 144px);
+    letter-spacing: -0.025em;
+    line-height: 0.95;
+    color: var(--color-foreground);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 1.2s var(--ease-quiet),
+                transform 1.2s var(--ease-quiet);
+    will-change: opacity, transform;
+  }
+  .attract__phrase[data-active="true"] {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* CTA — mono small caps, bottom-center, pulsing dot.
+     Ample top padding so it floats clear of the phrase. */
+  .attract__cta {
+    justify-self: center;
+    padding: 88px 0 56px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    color: var(--color-muted-foreground);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  /* ----------- language picker ----------- */
+
+  .langpick {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 0 clamp(24px, 4vw, 120px);
+  }
+  .langpick__row {
+    display: flex;
+    gap: clamp(16px, 2vw, 32px);
+  }
+  .langpick__card {
+    position: relative;
+    width: clamp(260px, 23vw, 440px);
+    height: clamp(320px, 26vw, 460px);
+    padding: clamp(24px, 2.4vw, 40px);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    background-color: var(--color-card);
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    user-select: none;
+    overflow: hidden;
+    transition:
+      border-color 280ms var(--ease-quiet),
+      transform    240ms var(--ease-quiet);
+  }
+  .langpick__card:hover    { border-color: var(--color-foreground); }
+  .langpick__card:active   { transform: scale(0.985); }
+
+  /* Drop-cap watermark — giant first letter, very faint */
+  .langpick__watermark {
+    position: absolute;
+    top: -28px;
+    right: -16px;
+    font-family: var(--font-sans);
+    font-style: italic;
+    font-variation-settings: "opsz" 60, "wght" 500;
+    font-size: clamp(160px, 14vw, 260px);
+    line-height: 0.8;
+    color: color-mix(in oklch, var(--color-muted) 60%, var(--color-background));
+    pointer-events: none;
+    z-index: 0;
+    user-select: none;
+  }
+
+  .langpick__native {
+    position: relative;
+    z-index: 1;
+    font-family: var(--font-sans);
+    font-style: italic;
+    font-variation-settings: "opsz" 60, "wght" 500;
+    font-size: clamp(40px, 4vw, 72px);
+    line-height: 0.95;
+    letter-spacing: -0.02em;
+    color: var(--color-foreground);
+    white-space: nowrap;
+  }
+  .langpick__locale {
+    position: relative;
+    z-index: 1;
+    margin-top: 18px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-muted-foreground);
+    font-weight: 500;
+  }
+
+  /* 4px terracotta bar fills the card's left edge on press */
+  .langpick__bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 4px;
+    height: 0;
+    background-color: var(--color-primary);
+    transition: height 280ms var(--ease-quiet);
+  }
+  .langpick__card[data-pressed="true"] .langpick__bar {
+    height: 100%;
+  }
+
+  /* ----------- survey ----------- */
+
+  .survey {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 60%) minmax(0, 40%);
+    padding: 56px clamp(24px, 3vw, 56px)
+             calc(80px + var(--kbd-h))
+             clamp(40px, 6vw, 120px);
+    gap: clamp(32px, 4vw, 80px);
+    transition: padding-bottom 280ms var(--ease-quiet);
+  }
+
+  /* Onscreen keyboard active — reserve space at the bottom and
+     tighten the text-input layout so the Continue button stays
+     above the keyboard. Tune --kbd-h per device. */
+  body.kbd-open { --kbd-h: 45vh; }
+  body.kbd-open .survey__main    { justify-content: flex-start; padding-top: 8vh; }
+  body.kbd-open .survey__question { margin-bottom: 32px; }
+  body.kbd-open .survey__actions  { margin-top: 32px; }
+  body.kbd-open .text-input__field { min-height: 120px; }
+
+  /* Portrait orientation — common on 10–13" Elo tablets. Stack the
+     survey's left/right columns so the chapter-marks and lang switch
+     sit beneath the question + answer rather than beside them. */
+  @media (orientation: portrait) {
+    .survey {
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr auto;
+      padding: 56px clamp(24px, 6vw, 80px);
+    }
+    .survey__meta {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 0;
+      text-align: left;
+    }
+    .survey__progress {
+      flex-direction: row-reverse;
+      align-items: center;
+      gap: 16px;
+    }
+    .chapter-marks {
+      flex-direction: row;
+      align-items: center;
+    }
+    .chapter-mark[data-state="current"] { width: 28px; height: 4px; }
+    .chapter-mark { width: 16px; }
+
+    /* Language picker — stack vertically in portrait */
+    .langpick__row { flex-direction: column; }
+    .langpick__card {
+      width: clamp(280px, 70vw, 480px);
+      height: clamp(140px, 18vh, 220px);
+    }
+    .langpick__watermark { font-size: clamp(120px, 18vh, 200px); }
+
+    /* Attract — phrase still bottom-anchored but with portrait margins */
+    .attract__phrase {
+      font-size: clamp(56px, 12vw, 120px);
+      left: clamp(24px, 6vw, 80px);
+      right: clamp(24px, 6vw, 80px);
+    }
+  }
+  .survey__main {
+    display: flex;
+    flex-direction: column;
+    justify-content: center; /* cluster around the vertical center */
+    min-width: 0;            /* enable text wrapping in grid child */
+  }
+  .survey__question {
+    margin-bottom: 56px;
+    position: relative;
+  }
+  .survey__qtext {
+    font-family: var(--font-sans);
+    font-variation-settings: "opsz" 60, "wght" 400;
+    font-size: clamp(44px, 3.6vw, 64px);
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+    color: var(--color-foreground);
+  }
+  .survey__answer { /* pure container — answer-type elements style themselves */ }
+  .survey__actions {
+    margin-top: 56px;
+  }
+
+  /* Right-column meta sidebar — vertical chapter index, lang bar */
+  .survey__meta {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding-top: 8px;
+    text-align: right;
+  }
+  .survey__progress {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 18px;
+  }
+  .survey__progress-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-muted-foreground);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .chapter-marks {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-end;
+  }
+  .chapter-mark {
+    display: block;
+    width: 28px;
+    height: 2px;
+    background-color: var(--color-border);
+    transition: width 320ms var(--ease-quiet),
+                background-color 320ms var(--ease-quiet);
+  }
+  .chapter-mark[data-state="done"]    { background-color: var(--color-muted-foreground); }
+  .chapter-mark[data-state="current"] { background-color: var(--color-primary); width: 48px; }
+
+  .survey__lang {
+    display: flex;
+    gap: 4px;
+  }
+  .lang-pill {
+    background: none;
+    border: 0;
+    cursor: pointer;
+    padding: 8px 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-muted-foreground);
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+    transition: color 240ms var(--ease-quiet),
+                border-color 240ms var(--ease-quiet);
+  }
+  .lang-pill:hover { color: var(--color-foreground); }
+  .lang-pill[data-active="true"] {
+    color: var(--color-foreground);
+    border-bottom-color: var(--color-primary);
+  }
+
+  /* Rating — numbers ARE the buttons; underline-on-select */
+  .rating-row {
+    display: flex;
+    gap: clamp(20px, 2.4vw, 36px);
+    flex-wrap: wrap;
+  }
+  .rating-btn {
+    width:  clamp(80px, 7vw, 112px);
+    height: clamp(80px, 7vw, 112px);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--color-background);
+    border: 2px solid var(--color-border);
+    border-radius: 9999px;
+    cursor: pointer;
+    padding: 0;
+    font-family: var(--font-sans);
+    font-style: italic;
+    font-variation-settings: "opsz" 60, "wght" 400;
+    font-size: clamp(36px, 3.2vw, 48px);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-foreground);
+    transition: color 240ms var(--ease-quiet),
+                border-color 240ms var(--ease-quiet),
+                background-color 240ms var(--ease-quiet),
+                transform 200ms var(--ease-quiet);
+  }
+  .rating-btn:hover {
+    border-color: var(--color-foreground);
+    transform: translateY(-2px);
+  }
+  .rating-btn:active { transform: scale(0.96); }
+  .rating-btn[data-selected="true"] {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-primary-foreground);
+    font-variation-settings: "opsz" 60, "wght" 500;
+  }
+
+  /* Choice options — full-row tap target, square indicator */
+  .choice-list {
+    display: flex;
+    flex-direction: column;
+  }
+  .choice-btn {
+    width: 100%;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    padding: 28px 0;
+    border-bottom: 1px solid var(--color-border);
+    transition: border-color 240ms var(--ease-quiet);
+  }
+  .choice-btn:hover { border-bottom-color: var(--color-foreground); }
+  .choice-indicator {
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    border: 2px solid var(--color-foreground);
+    background-color: var(--color-background);
+    position: relative;
+    transition: background-color 240ms var(--ease-quiet),
+                border-color    240ms var(--ease-quiet);
+  }
+  .choice-btn[data-selected="true"] .choice-indicator {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+  .choice-indicator__check {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    stroke: var(--color-primary-foreground);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    opacity: 0;
+    transform: rotate(12deg);
+    transform-origin: center;
+    transition: opacity 240ms var(--ease-quiet),
+                transform 360ms var(--ease-quiet);
+  }
+  .choice-btn[data-selected="true"] .choice-indicator__check {
+    opacity: 1;
+    transform: rotate(0deg);
+  }
+  .choice-text {
+    font-family: var(--font-sans);
+    font-variation-settings: "opsz" 24, "wght" 400;
+    font-size: clamp(22px, 2vw, 32px);
+    line-height: 1.35;
+    color: var(--color-foreground);
+    flex: 1;
+  }
+
+  /* Text input — bottom-border only, mono floating label */
+  .text-input {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .text-input__label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-muted-foreground);
+    font-weight: 500;
+  }
+  .text-input__field {
+    width: 100%;
+    min-height: 200px;
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid var(--color-border);
+    padding: 12px 0;
+    font-family: var(--font-sans);
+    font-size: 24px;
+    font-variation-settings: "opsz" 24, "wght" 400;
+    line-height: 1.4;
+    color: var(--color-foreground);
+    outline: none;
+    resize: none;
+    transition: border-color 240ms var(--ease-quiet);
+  }
+  .text-input__field::placeholder {
+    color: var(--color-muted-foreground);
+    opacity: 0.6;
+  }
+  .text-input__field:focus { border-bottom-color: var(--color-primary); }
+
+  /* Continue button — text-only with extending arrow */
+  .survey__submit {
+    background: none;
+    border: 0;
+    cursor: pointer;
+    padding: 8px 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 22px;
+    font-family: var(--font-mono);
+    font-size: 15px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    font-weight: 500;
+    color: var(--color-foreground);
+    transition: color 240ms var(--ease-quiet);
+  }
+  .survey__submit:hover { color: var(--color-primary); }
+  .survey__submit__arrow {
+    display: inline-block;
+    transition: transform 280ms var(--ease-quiet),
+                color     240ms var(--ease-quiet);
+  }
+  .survey__submit:hover .survey__submit__arrow {
+    transform: translateX(8px);
+    color: var(--color-primary);
+  }
+  .survey__submit[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .survey__submit[data-busy="true"] .survey__submit__arrow {
+    animation: spin 900ms linear infinite;
+    transform-origin: center;
+  }
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+
+  /* ----------- thank-you screen ----------- */
+
+  .thanks {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 0 clamp(40px, 6vw, 120px);
+    text-align: center;
+  }
+  .thanks__inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+    animation: thanks-rise 800ms var(--ease-quiet) both;
+  }
+  .thanks__phrase {
+    font-family: var(--font-sans);
+    font-style: normal;
+    font-variation-settings: "opsz" 60, "wght" 400;
+    font-size: clamp(72px, 9vw, 140px);
+    letter-spacing: -0.025em;
+    line-height: 1.0;
+    color: var(--color-foreground);
+  }
+  .thanks__period {
+    color: var(--color-primary);
+  }
+  .thanks__rule {
+    width: clamp(240px, 40vw, 560px);
+    height: 2px;
+    background-color: var(--color-primary);
+  }
+  .thanks__sub {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-muted-foreground);
+    font-weight: 500;
+  }
+  @keyframes thanks-rise {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ----------- offline badge (status bar) ----------- */
+
+  .offline-badge {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-primary);
+    font-weight: 500;
+  }
+  .offline-badge[data-visible="true"] { display: inline-flex; }
+  .offline-badge .pulse-dot { background-color: var(--color-primary); }
+
+  /* ----------- idle warning (top-center footnote) ----------- */
+
+  .idle-warning {
+    position: fixed;
+    top: 32px;
+    left: 50%;
+    transform: translate(-50%, -8px);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 320ms var(--ease-quiet),
+                transform 320ms var(--ease-quiet);
+    text-align: center;
+    z-index: 50;
+  }
+  .idle-warning[data-visible="true"] {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  .idle-warning__text {
+    font-family: var(--font-sans);
+    font-style: italic;
+    font-variation-settings: "opsz" 24, "wght" 400;
+    font-size: 18px;
+    color: var(--color-muted-foreground);
+    margin-bottom: 10px;
+    display: block;
+  }
+  .idle-warning__rule {
+    width: 80px;
+    height: 2px;
+    margin: 0 auto;
+    background-color: var(--color-primary);
+    transform: scaleX(0);
+    transform-origin: center;
+    transition: transform 480ms var(--ease-quiet);
+  }
+  .idle-warning[data-visible="true"] .idle-warning__rule {
+    transform: scaleX(1);
+  }
+
+  /* ----------- 429 cooldown overlay ----------- */
+
+  .cooldown {
+    position: fixed;
+    inset: 0;
+    background-color: var(--color-background);
+    display: grid;
+    place-items: center;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 360ms var(--ease-quiet);
+  }
+  .cooldown[data-visible="true"] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .cooldown__phrase {
+    font-family: var(--font-sans);
+    font-style: italic;
+    font-variation-settings: "opsz" 60, "wght" 400;
+    font-size: clamp(56px, 6vw, 88px);
+    line-height: 1.1;
+    color: var(--color-foreground);
+    text-align: center;
+    max-width: 1000px;
+  }
+
+  /* ----------- inline validation manicule ----------- */
+
+  .validation-mark {
+    position: absolute;
+    left: -56px;
+    top: 0;
+    color: var(--color-primary);
+    font-family: var(--font-sans);
+    font-style: italic;
+    font-variation-settings: "opsz" 60, "wght" 500;
+    font-size: 56px;
+    line-height: 1;
+    opacity: 0;
+    transform: translateX(8px);
+    transition: opacity 240ms var(--ease-quiet),
+                transform 240ms var(--ease-quiet);
+    pointer-events: none;
+  }
+  .validation-mark[data-visible="true"] {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  .validation-message {
+    margin-top: 20px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-primary);
+    font-weight: 500;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 240ms var(--ease-quiet),
+                transform 240ms var(--ease-quiet);
+  }
+  .validation-message[data-visible="true"] {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ----------- shared atoms ----------- */
+
+  .pulse-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background-color: var(--color-primary);
+    animation: pulse-dot 1.8s var(--ease-quiet) infinite;
+  }
+  .manicule {
+    color: var(--color-primary);
+    font-family: var(--font-sans);
+    font-style: italic;
+    font-weight: 500;
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50%      { opacity: 1.0; transform: scale(1.15); }
+}
+
+/* ------------------------------------------------------------
+   Reduced motion — flatten everything to instant fades.
+   ------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 120ms !important;
+  }
+}

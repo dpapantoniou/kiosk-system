@@ -1,0 +1,12 @@
+{
+  "name": "CX-FP Kiosk",
+  "short_name": "CX-FP",
+  "description": "CX-FP feedback kiosk",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#fbf8f0",
+  "theme_color": "#fbf8f0",
+  "lang": "en"
+}

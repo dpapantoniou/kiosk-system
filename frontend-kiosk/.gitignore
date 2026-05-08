@@ -1,0 +1,7 @@
+# Tailwind standalone binary — machine-specific, downloaded per dev machine
+tailwindcss
+tailwindcss-*
+
+# Editor cruft
+.DS_Store
+*.swp

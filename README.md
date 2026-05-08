@@ -1,4 +1,4 @@
-# CX-FP — Customer Expeience Feedback Platform
+# CX-FP — Customer Experience Feedback Platform
 
 CX-FP is a kiosk-based multilingual feedback platform designed for private or public-sector environments.
 

@@ -82,6 +82,7 @@ async function syncOffline() {
     console.log("Attempting sync of", queue.length, "offline responses");
 
     const remaining = [];
+    let dropped = 0;
     for (const item of queue) {
         try {
             const res = await fetch(API + "/responses", {
@@ -89,14 +90,20 @@ async function syncOffline() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(item),
             });
-            if (!res.ok) throw new Error("Failed sync");
+            // 4xx: backend rejects this entry — drop it (retrying will
+            // fail again). 5xx + network: keep for retry.
+            if (res.status >= 400 && res.status < 500) {
+                console.warn("Dropping queued response (status " + res.status + ")");
+                dropped++;
+                continue;
+            }
+            if (!res.ok) throw new Error("Sync failed " + res.status);
         } catch {
             remaining.push(item);
         }
     }
     localStorage.setItem("offlineQueue", JSON.stringify(remaining));
-
-    console.log("Sync complete. Remaining:", remaining.length);
+    console.log("Sync complete. Remaining:", remaining.length, "dropped:", dropped);
 }
 
 // View Transitions API where supported, instant swap otherwise.
@@ -751,8 +758,7 @@ async function finalizeQuestionnaire() {
         });
 
         if (res.status === 429) {
-            // Rapid-repeat / cooldown — surface a brief message,
-            // do NOT submit, return to attract after 4s.
+            // Anti-abuse cooldown — don't queue (retry would re-fail).
             showCooldownOverlay();
             setTimeout(() => {
                 hideCooldownOverlay();
@@ -762,11 +768,23 @@ async function finalizeQuestionnaire() {
             return;
         }
 
-        if (!res.ok) throw new Error("Network error");
-        console.log("Submitted successfully");
+        if (res.status >= 500) {
+            // Server hiccup — queue for retry via syncOffline.
+            throw new Error("Server error " + res.status);
+        }
+
+        if (!res.ok) {
+            // Other 4xx (400/401/403/404/422 etc.) — backend rejected
+            // the response. Queueing would re-fail; log and continue
+            // to the thank-you screen so the kiosk doesn't get stuck.
+            console.error("Backend rejected response:", res.status);
+        } else {
+            console.log("Submitted successfully");
+        }
 
     } catch (e) {
-        console.log("Offline — storing response", e);
+        // Network failure or 5xx — retryable.
+        console.log("Network/server error — queueing response", e);
         saveOffline(payload);
     }
 

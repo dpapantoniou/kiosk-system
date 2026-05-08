@@ -383,7 +383,9 @@
     inset: 0;
     display: grid;
     grid-template-columns: minmax(0, 60%) minmax(0, 40%);
-    padding: 56px clamp(24px, 3vw, 56px)
+    /* Top padding clears the floating header (logo / status bar);
+       bottom padding grows by --kbd-h when the OS keyboard is open. */
+    padding: clamp(104px, 9vw, 144px) clamp(24px, 3vw, 56px)
              calc(80px + var(--kbd-h))
              clamp(40px, 6vw, 120px);
     gap: clamp(32px, 4vw, 80px);
@@ -406,7 +408,7 @@
     .survey {
       grid-template-columns: 1fr;
       grid-template-rows: 1fr auto;
-      padding: 56px clamp(24px, 6vw, 80px);
+      padding: clamp(104px, 12vw, 144px) clamp(24px, 6vw, 80px) 56px;
     }
     .survey__meta {
       flex-direction: row;

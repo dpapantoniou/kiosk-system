@@ -65,6 +65,10 @@ let state = {
     currentQuestionIndex: 0,
 };
 
+// 4xx (other than 429, which callers handle separately) means the
+// backend rejected this payload — retrying will fail again. Drop it.
+const isClientError = (res) => res.status >= 400 && res.status < 500;
+
 function saveOffline(payload) {
     try {
         let queue = JSON.parse(localStorage.getItem("offlineQueue") || "[]");
@@ -89,10 +93,9 @@ async function syncOffline() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(item),
+                signal: AbortSignal.timeout(5000),
             });
-            // 4xx: backend rejects this entry — drop it (retrying will
-            // fail again). 5xx + network: keep for retry.
-            if (res.status >= 400 && res.status < 500) {
+            if (isClientError(res)) {
                 console.warn("Dropping queued response (status " + res.status + ")");
                 dropped++;
                 continue;
@@ -304,12 +307,10 @@ const DEMO_LOGO = "data:image/svg+xml;utf8," + encodeURIComponent(
 
 async function start() {
 
-    // Demo mode — skip the network entirely
     if (isDemo) {
         state.questionnaire = DEMO_QUESTIONNAIRE;
         state.answers = {};
         state.currentQuestionIndex = 0;
-        document.getElementById("kiosk-logo").src = DEMO_LOGO;
         document.getElementById("logo-area").style.visibility = "visible";
         state.screen = "survey";
         render();
@@ -318,7 +319,9 @@ async function start() {
     }
 
     try {
-        const res = await fetch(API + "/by-code/" + state.kioskCode);
+        const res = await fetch(API + "/by-code/" + state.kioskCode, {
+            signal: AbortSignal.timeout(8000),
+        });
         if (!res.ok) throw new Error("Network error");
         const data = await res.json();
         state.questionnaire = data.questionnaire;
@@ -751,7 +754,6 @@ async function finalizeQuestionnaire() {
     };
 
     if (isDemo) {
-        // Demo mode — skip the POST, just show the thank-you flow.
         console.log("Demo submit (not sent):", payload);
         state.screen = "thankyou";
         render();
@@ -764,6 +766,7 @@ async function finalizeQuestionnaire() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(10000),
         });
 
         if (res.status === 429) {
@@ -782,18 +785,17 @@ async function finalizeQuestionnaire() {
             throw new Error("Server error " + res.status);
         }
 
-        if (!res.ok) {
-            // Other 4xx (400/401/403/404/422 etc.) — backend rejected
-            // the response. Queueing would re-fail; log and continue
-            // to the thank-you screen so the kiosk doesn't get stuck.
-            console.error("Backend rejected response:", res.status);
+        if (isClientError(res)) {
+            // Backend rejected (400/401/403/404/422). Queueing re-fails;
+            // log and continue to thank-you so the kiosk doesn't get stuck.
+            console.warn("Backend rejected response:", res.status);
         } else {
             console.log("Submitted successfully");
         }
 
     } catch (e) {
         // Network failure or 5xx — retryable.
-        console.log("Network/server error — queueing response", e);
+        console.warn("Network/server error — queueing response", e);
         saveOffline(payload);
     }
 

@@ -1,0 +1,9 @@
+{
+  "name": "frontend-kiosk",
+  "private": true,
+  "description": "CX-FP kiosk frontend. Vanilla HTML/CSS/JS. Tailwind CLI is dev-only — kiosk loads plain kiosk.css.",
+  "scripts": {
+    "dev:css": "./tailwindcss -i input.css -o kiosk.css --watch",
+    "build:css": "./tailwindcss -i input.css -o kiosk.css --minify"
+  }
+}

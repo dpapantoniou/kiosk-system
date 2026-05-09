@@ -582,6 +582,9 @@ function formatKioskStatus(status) {
                      <button onclick="editKiosk(${k.id})">
                        Edit
                      </button>
+					 <button onclick="disableKiosk(${k.id})">
+                       Disable
+                     </button>
                   </td>
                 </tr>
               `).join("")}
@@ -1163,4 +1166,34 @@ function loadEditLogoFile(input) {
     };
 
     reader.readAsDataURL(file);
+}
+
+async function disableKiosk(id) {
+
+    const ok = confirm(
+        "Disable this kiosk?\n\nThis preserves historical data but removes the kiosk from active operation."
+    )
+
+    if (!ok) return
+
+    const r = await fetch(`/kiosk/kiosks/${id}`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        credentials: "include",
+        body: JSON.stringify({
+            enabled: false
+        })
+    })
+
+    if (!r.ok) {
+
+        alert("Failed to disable kiosk")
+        return
+    }
+
+    await loadKiosks()
+
+    alert("Kiosk disabled")
 }

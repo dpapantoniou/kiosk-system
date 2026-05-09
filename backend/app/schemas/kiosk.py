@@ -1,6 +1,5 @@
 from pydantic import BaseModel, Field
 
-
 class KioskBase(BaseModel):
 
     code: str = Field(
@@ -19,6 +18,7 @@ class KioskBase(BaseModel):
     )
 
     is_active: bool = True
+    enabled: bool = True
 
 
 class KioskCreate(KioskBase):
@@ -28,7 +28,6 @@ class KioskCreate(KioskBase):
     logo_data: str | None = None
 
     logo_mime: str | None = None
-
 
 class KioskRead(KioskBase):
 

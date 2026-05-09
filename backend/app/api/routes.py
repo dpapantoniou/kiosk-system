@@ -47,6 +47,7 @@ from app.services.kiosk_monitoring import (
     load_heartbeat_config,
     record_kiosk_activity,
 )
+from app.services.licensing import load_licensing_config
 
 class BulkAssignRequest(BaseModel):
     questionnaire_id: int
@@ -56,6 +57,7 @@ class KioskUpdate(BaseModel):
     name: str | None = None
     location: str | None = None
     is_active: bool | None = None
+    enabled: bool | None = None
     questionnaire_id: int | None = None
     logo_data: str | None = None
 
@@ -225,9 +227,8 @@ def update_kiosk(
 
         del data["logo_data"]
 
-    for key, value in data.items():
-
-        setattr(kiosk, key, value)
+    for key, value in data.items(): setattr(kiosk, key, value)
+    if not kiosk.enabled: kiosk.is_active = False
 
     db.add(kiosk)
 
@@ -292,7 +293,8 @@ def receive_kiosk_heartbeat(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    kiosk = db.query(Kiosk).filter(Kiosk.code == payload.kiosk_code).first()
+    kiosk = (db.query(Kiosk).filter(Kiosk.code == payload.kiosk_code, Kiosk.enabled == True).first())
+    
     if not kiosk:
         raise HTTPException(status_code=404, detail="Kiosk not found")
 
@@ -324,7 +326,7 @@ def list_kiosk_statuses(
     user: AdminUser = Depends(require_manager_or_admin),
 ):
     config = load_heartbeat_config()
-    kiosks = db.scalars(select(Kiosk).order_by(Kiosk.id)).all()
+    kiosks = db.scalars(select(Kiosk).where(Kiosk.enabled == True).order_by(Kiosk.id)).all()
     statuses = {
         s.kiosk_code: s
         for s in db.query(KioskStatus).all()
@@ -355,18 +357,29 @@ def list_kiosks(
     db: Session = Depends(get_db),
     user: AdminUser = Depends(require_manager_or_admin)
 ):
-    return db.scalars(select(Kiosk).order_by(Kiosk.id)).all()
+    return db.scalars(select(Kiosk).where(Kiosk.enabled == True).order_by(Kiosk.id)).all()
 
 @router.post(
     "/kiosks",
     response_model=KioskRead,
     status_code=status.HTTP_201_CREATED
 )
+
 def create_kiosk(
     payload: KioskCreate,
     db: Session = Depends(get_db),
     user: AdminUser = Depends(require_admin)
 ):
+    config = load_licensing_config()
+    licensed_kiosks = db.query(Kiosk).filter(
+    Kiosk.enabled == True
+    ).count()
+    if licensed_kiosks >= config["max_licensed_kiosks"]:
+        raise HTTPException(
+        status_code=403,
+        detail="Maximum licensed kiosk count exceeded"
+        )
+
 
     existing = db.scalar(
         select(Kiosk).where(
@@ -585,7 +598,7 @@ from sqlalchemy.orm import selectinload
 
 @router.get("/kiosks/{code}/questionnaire")
 def get_kiosk_questionnaire(code: str, db: Session = Depends(get_db)):
-    kiosk = db.query(Kiosk).filter(Kiosk.code == code).first()
+    kiosk = db.query(Kiosk).filter(Kiosk.code == code, Kiosk.enabled == True).first()
     if not kiosk:
         raise HTTPException(status_code=404, detail="Kiosk not found")
     if not kiosk.questionnaire_id:
@@ -622,12 +635,7 @@ def get_kiosk_by_code(
     code: str,
     db: Session = Depends(get_db)
 ):
-    kiosk = (
-        db.query(Kiosk)
-        .filter(Kiosk.code == code)
-        .first()
-    )
-
+    kiosk = db.query(Kiosk).filter(Kiosk.code == code, Kiosk.enabled == True).first()
     if not kiosk:
         raise HTTPException(
             status_code=404,
@@ -839,7 +847,7 @@ def analytics_summary(
 
     active_kiosks = (
         db.query(Kiosk)
-        .filter(Kiosk.is_active == True)
+        .filter(Kiosk.enabled ==True, Kiosk.is_active == True)
         .count()
     )
 
@@ -849,7 +857,7 @@ def analytics_summary(
         s.kiosk_code: s
         for s in db.query(KioskStatus).all()
     }
-    for kiosk in db.query(Kiosk).filter(Kiosk.is_active == True).all():
+    for kiosk in db.query(Kiosk).filter(Kiosk.enabled == True, Kiosk.is_active == True).all():
         row = status_rows.get(kiosk.code)
         state, _ = evaluate_status(row.last_seen if row else None, config)
         if state in {"offline", "never_seen"}:
@@ -885,12 +893,7 @@ def bulk_assign_questionnaire(
     if not questionnaire:
         raise HTTPException(status_code=404, detail="Questionnaire not found")
 
-    kiosks = (
-        db.query(Kiosk)
-        .filter(Kiosk.id.in_(payload.kiosk_ids))
-        .all()
-    )
-
+    kiosks = (db.query(Kiosk).filter(Kiosk.id.in_(payload.kiosk_ids), Kiosk.enabled == True).all())
     found_ids = {kiosk.id for kiosk in kiosks}
     missing_ids = sorted(set(payload.kiosk_ids) - found_ids)
 

@@ -38,6 +38,11 @@ class Kiosk(Base):
         Boolean,
         default=True
     )
+    
+    enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True
+    )
 
     logo_blob: Mapped[bytes | None] = mapped_column(
         LargeBinary,

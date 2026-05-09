@@ -242,7 +242,6 @@
 	<input type="file"
        id="logo_upload"
 	   onchange="loadLogoFile(this)">
-	
 
     <label>Active</label>
     <select id="kiosk_active">
@@ -286,11 +285,17 @@
   <button onclick="saveKioskEdit()">
     Save Changes
   </button>
+  
+   <button
+    style="background:#b00020;"
+    onclick="disableKiosk()">
+    Disable Kiosk
+   </button>
 
-  <button class="secondary"
+    <button class="secondary"
           onclick="cancelKioskEdit()">
     Cancel
-  </button>
+    </button>
 
   <div id="edit_kiosk_result"
        class="muted"></div>
